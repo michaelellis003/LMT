@@ -12,7 +12,7 @@ jobs:
       matrix: ${{ steps.python-version.outputs.matrix }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Get Python version
         id: python-version
@@ -31,7 +31,7 @@ jobs:
           df -h
 
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Cache Poetry dependencies
         uses: actions/cache@v4
@@ -77,7 +77,7 @@ jobs:
       version: ${{ steps.get_version.outputs.version }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Configure Git
         run: |
@@ -118,7 +118,7 @@ jobs:
       contents: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Setup Python with Poetry
         uses: ./.github/actions/setup-python-poetry
@@ -153,7 +153,7 @@ jobs:
         run: df . -h
 
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Setup Python with Poetry
         uses: ./.github/actions/setup-python-poetry
@@ -193,7 +193,7 @@ jobs:
     if: github.ref == 'refs/heads/main'
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Setup Python with Poetry
         uses: ./.github/actions/setup-python-poetry
