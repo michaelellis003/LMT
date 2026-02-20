@@ -23,7 +23,7 @@ dependencies = [
 packages = [{include = "lmt", from = "src"}]
 
 [tool.poetry.group.dev.dependencies]
-pytest = "^8.3.4"
+pytest = "^9.0.2"
 pyright = "^1.1.394"
 pytest-cov = "^6.0.0"
 pre-commit = "^4.1.0"
