@@ -1,5 +1,6 @@
 # Language Modeling using Transformers (LMT)
 
+[![CI](https://github.com/michaelellis003/LMT/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/michaelellis003/LMT/actions/workflows/ci-cd.yml)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.7%2B-red.svg)](https://pytorch.org/)
 [![License](https://img.shields.io/badge/license-Apache%202.0-green.svg)](LICENSE)
