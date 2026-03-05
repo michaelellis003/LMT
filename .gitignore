@@ -20,3 +20,14 @@ scripts/models/*
 # Data files
 data/*.csv
 data/*.tsv
+
+# Secrets -- never commit
+.env
+.env.*
+.envrc
+
+# Agent infrastructure (symlinked from LMT-meta in devcontainer)
+CLAUDE.md
+AGENT_PLAN.md
+.claude/
+.devcontainer/
