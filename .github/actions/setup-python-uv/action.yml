@@ -1,5 +1,5 @@
-name: 'Setup Python with Poetry'
-description: 'Setup Python with Poetry'
+name: 'Setup Python with uv'
+description: 'Setup Python with uv'
 inputs:
   python-version:
     description: 'Python version'
@@ -12,18 +12,13 @@ inputs:
 runs:
   using: 'composite'
   steps:
+    - name: 'Install uv'
+      uses: astral-sh/setup-uv@v5
     - name: 'Setup Python'
       uses: actions/setup-python@v5
       with:
         python-version: ${{ inputs.python-version }}
-    - name: 'Install Poetry'
-      shell: bash
-      run: |
-        python -m pip install --upgrade pip
-        python -m pip install poetry
-        poetry config virtualenvs.create true
-        poetry config virtualenvs.in-project true
     - name: Install dependencies
       if: ${{ inputs.install-dependencies == 'true' }}
       shell: bash
-      run: poetry install --no-interaction
+      run: uv sync

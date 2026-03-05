@@ -1,5 +1,5 @@
 name: 'Build Package'
-description: 'Build Python package with Poetry'
+description: 'Build Python package with uv'
 inputs:
   python-version:
     description: 'Python version'
@@ -7,11 +7,11 @@ inputs:
 runs:
   using: 'composite'
   steps:
-    - name: Setup Python with Poetry
-      uses: ./.github/actions/setup-python-poetry
+    - name: Setup Python with uv
+      uses: ./.github/actions/setup-python-uv
       with:
         python-version: ${{ inputs.python-version }}
 
     - name: Build package
       shell: bash
-      run: poetry build
+      run: uv build
