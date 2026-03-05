@@ -12,10 +12,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Implementation of various attention mechanisms."""
+"""Attention mechanism implementations.
+
+Registry mapping string keys to attention classes for use in
+configurable blocks.
+"""
 
 from .causal_attention import CausalAttention
 from .multihead_attention import MultiHeadAttention
 from .self_attention import SelfAttention
 
 __all__ = ['SelfAttention', 'CausalAttention', 'MultiHeadAttention']
+
+ATTENTION_REGISTRY: dict[str, type] = {
+    'mha': MultiHeadAttention,
+}
