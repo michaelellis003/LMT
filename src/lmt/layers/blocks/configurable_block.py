@@ -3,9 +3,16 @@
 Instead of hardcoding specific attention/FFN/norm combinations (like
 LlamaBlock or MixtralBlock), this block looks up components by string
 key in the layer registries, making it easy to mix and match.
+
+Supports optional RoPE integration and sliding window masking via
+``BlockConfig``, so named models like LLaMA and Mixtral can be
+expressed as configuration rather than custom code.
 """
 
-from dataclasses import dataclass
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 import torch.nn as nn
 from torch import Tensor
@@ -21,6 +28,9 @@ from lmt.layers.ffn.moe import MoEFeedForward
 from lmt.layers.normalization import NORM_REGISTRY
 from lmt.models.config import ModelConfig
 
+if TYPE_CHECKING:
+    from lmt.layers.positional import RoPE
+
 
 @dataclass
 class BlockConfig:
@@ -33,6 +43,8 @@ class BlockConfig:
         moe_num_experts: Number of MoE experts (only used if ffn='moe').
         moe_top_k: Experts per token (only used if ffn='moe').
         moe_shared_experts: Always-active experts (only if ffn='moe').
+        rope: Optional RoPE instance for attention layers that support it.
+        window_size: Optional sliding window size for GQA.
     """
 
     attention: str = 'gqa'
@@ -41,6 +53,8 @@ class BlockConfig:
     moe_num_experts: int = 8
     moe_top_k: int = 2
     moe_shared_experts: int = 0
+    rope: RoPE | None = field(default=None, repr=False)
+    window_size: int | None = None
 
 
 class ConfigurableBlock(nn.Module):
@@ -96,7 +110,11 @@ class ConfigurableBlock(nn.Module):
         if key == 'mha':
             return MultiHeadAttention(model_config)
         elif key == 'gqa':
-            return GroupedQueryAttention(model_config)
+            return GroupedQueryAttention(
+                model_config,
+                rope=block_config.rope,
+                window_size=block_config.window_size,
+            )
         elif key == 'sliding_window':
             return SlidingWindowAttention(model_config)
         else:
@@ -129,6 +147,12 @@ class ConfigurableBlock(nn.Module):
         elif key == 'swiglu':
             ffn_cls = FFN_REGISTRY['swiglu']
             return ffn_cls(d_model=model_config.embed_dim)
+        elif key == 'default':
+            ffn_cls = FFN_REGISTRY['default']
+            return ffn_cls(
+                embed_dim=model_config.embed_dim,
+                hidden_dim=4 * model_config.embed_dim,
+            )
         else:
             ffn_cls = FFN_REGISTRY[key]
             return ffn_cls(model_config.embed_dim)

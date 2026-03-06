@@ -1,6 +1,6 @@
 # Attention Mechanisms
 
-LMT implements four attention variants, each building on the last.
+LMT implements six attention variants, each building on the last.
 
 ## Multi-Head Attention (MHA)
 
@@ -128,9 +128,95 @@ the middle" and prevents weight absorption. By separating content and
 position into independent paths, MLA gets both compression efficiency
 and positional encoding.
 
+## Flash Attention
+
+From Dao et al. (2022). Used in virtually all modern LLMs.
+
+**Key idea**: Standard attention materializes the full $N \times N$ score
+matrix, which is memory-bound on GPUs. Flash Attention processes Q and K/V
+in **tiles**, using **online softmax** to avoid ever storing the full matrix.
+
+The result is mathematically identical to standard attention, but uses
+$O(N)$ HBM memory instead of $O(N^2)$.
+
+```python
+from lmt.layers.attention import FlashAttention
+
+config = ModelConfig(embed_dim=256, num_heads=8, ...)
+flash = FlashAttention(config, block_size=64)
+```
+
+Our implementation is a **pure Python educational version** demonstrating the
+tiling algorithm. For production, use PyTorch's `scaled_dot_product_attention`.
+
+See [Flash Attention](flash-attention.md) for the full algorithm walkthrough.
+
+---
+
+## Gated Delta Networks (Linear Attention)
+
+From Yang et al. (2024, ICLR 2025). Used in Qwen3-Next and Kimi Linear.
+
+**Key idea**: Replace softmax attention with a **recurrent state matrix**
+\(S \in \mathbb{R}^{d_h \times d_h}\) updated via the gated delta rule.
+Causality is inherent in the recurrence -- no mask needed.
+
+### Standard linear attention (naive)
+
+\[
+S_t = S_{t-1} + v_t k_t^\top
+\]
+
+This accumulates forever, filling the memory with noise.
+
+### Delta rule (targeted correction)
+
+\[
+S_t = S_{t-1} + \beta_t (v_t - S_{t-1} k_t) k_t^\top
+\]
+
+This is one step of gradient descent on \(\|Sk - v\|^2\). It writes
+"what should be there minus what's already there" -- a surgical update.
+
+### Gated DeltaNet (with decay)
+
+\[
+S_t = \alpha_t S_{t-1} + \beta_t (v_t - \alpha_t S_{t-1} k_t) k_t^\top
+\]
+
+\[
+o_t = S_t q_t
+\]
+
+Where \(\alpha_t \in (0, 1]\) is a decay gate (like SSM forgetting) and
+\(\beta_t \in (0, 1)\) controls update strength.
+
+```python
+from lmt.layers.attention import GatedDeltaNet
+
+config = ModelConfig(embed_dim=256, num_heads=8, ...)
+gdn = GatedDeltaNet(config)
+```
+
+**Complexity**: \(O(n \cdot d_h^2)\) per layer -- linear in sequence length,
+quadratic in head dimension. Wins over \(O(n^2 \cdot d_h)\) softmax attention
+when sequences are long relative to head dimension.
+
+**Connection to SSMs**: The decay gate \(\alpha\) IS the SSM decay factor.
+Mamba-2 proved that SSMs and linear attention are mathematically dual --
+GatedDeltaNet is a concrete instance of this duality.
+
+**Hybrid architectures**: In practice, 3 GatedDeltaNet layers alternate
+with 1 full attention layer (3:1 ratio), because the fixed-size state
+compresses context lossily.
+
+---
+
 ## References
 
 - Vaswani et al., [*Attention Is All You Need*](https://arxiv.org/abs/1706.03762) (2017) -- multi-head attention
 - Ainslie et al., [*GQA: Training Generalized Multi-Query Transformer Models from Multi-Head Checkpoints*](https://arxiv.org/abs/2305.13245) (2023) -- grouped query attention
 - Beltagy et al., [*Longformer: The Long-Document Transformer*](https://arxiv.org/abs/2004.05150) (2020) -- sliding window attention
 - DeepSeek-AI, [*DeepSeek-V2: A Strong, Economical, and Efficient Mixture-of-Experts Language Model*](https://arxiv.org/abs/2405.04434) (2024) -- multi-head latent attention
+- Dao et al., [*FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness*](https://arxiv.org/abs/2205.14135) (2022) -- flash attention
+- Yang et al., [*Gated Delta Networks: Improving Mamba2 with Delta Rule*](https://arxiv.org/abs/2412.06464) (2024) -- gated delta networks
