@@ -3,6 +3,7 @@
 import torch
 
 from lmt.layers.attention import GroupedQueryAttention
+from lmt.layers.positional import RoPE
 from lmt.models.config import ModelConfig
 
 
@@ -158,3 +159,152 @@ class TestGroupedQueryAttention:
         config = self._make_config(num_heads=8, num_kv_heads=3)
         with pytest.raises((AssertionError, ValueError)):
             GroupedQueryAttention(config)
+
+
+class TestGQAWithRoPE:
+    """Test GQA with integrated RoPE support."""
+
+    def _make_config(self, **kwargs):
+        """Create a ModelConfig with sensible defaults."""
+        defaults = dict(
+            embed_dim=64,
+            num_heads=4,
+            num_kv_heads=2,
+            context_length=32,
+            vocab_size=1000,
+            num_layers=1,
+            dropout=0.0,
+        )
+        defaults.update(kwargs)
+        return ModelConfig(**defaults)
+
+    def test_rope_output_shape(self) -> None:
+        """GQA with RoPE produces correct output shape."""
+        config = self._make_config()
+        head_dim = config.embed_dim // config.num_heads
+        rope = RoPE(d_model=head_dim, max_seq_len=config.context_length)
+        gqa = GroupedQueryAttention(config, rope=rope)
+        x = torch.randn(2, 16, 64)
+        out = gqa(x)
+        assert out.shape == (2, 16, 64)
+
+    def test_rope_changes_output(self) -> None:
+        """RoPE should change the attention output vs no-RoPE."""
+        config = self._make_config()
+        head_dim = config.embed_dim // config.num_heads
+        rope = RoPE(d_model=head_dim, max_seq_len=config.context_length)
+
+        gqa_no_rope = GroupedQueryAttention(config)
+        gqa_rope = GroupedQueryAttention(config, rope=rope)
+
+        # Copy weights
+        gqa_rope.q_proj.weight.data.copy_(gqa_no_rope.q_proj.weight.data)
+        gqa_rope.k_proj.weight.data.copy_(gqa_no_rope.k_proj.weight.data)
+        gqa_rope.v_proj.weight.data.copy_(gqa_no_rope.v_proj.weight.data)
+        gqa_rope.out_proj.weight.data.copy_(gqa_no_rope.out_proj.weight.data)
+
+        x = torch.randn(1, 8, 64)
+        out_no_rope = gqa_no_rope(x)
+        out_rope = gqa_rope(x)
+
+        # Outputs should differ because RoPE rotates Q and K
+        assert not torch.allclose(out_no_rope, out_rope, atol=1e-5)
+
+    def test_rope_gradient_flow(self) -> None:
+        """Gradients flow through GQA+RoPE."""
+        config = self._make_config()
+        head_dim = config.embed_dim // config.num_heads
+        rope = RoPE(d_model=head_dim, max_seq_len=config.context_length)
+        gqa = GroupedQueryAttention(config, rope=rope)
+        x = torch.randn(2, 8, 64, requires_grad=True)
+        out = gqa(x)
+        out.sum().backward()
+        assert x.grad is not None
+        assert not torch.all(x.grad == 0)
+
+    def test_rope_causal_masking(self) -> None:
+        """Causal masking still works with RoPE enabled."""
+        config = self._make_config(embed_dim=32, num_heads=2, num_kv_heads=1)
+        head_dim = config.embed_dim // config.num_heads
+        rope = RoPE(d_model=head_dim, max_seq_len=config.context_length)
+        gqa = GroupedQueryAttention(config, rope=rope)
+        gqa.eval()
+
+        x1 = torch.randn(1, 8, 32)
+        x2 = x1.clone()
+        x2[0, 5:] = torch.randn(3, 32)
+
+        with torch.no_grad():
+            out1 = gqa(x1)
+            out2 = gqa(x2)
+
+        # Positions before the change should be identical
+        assert torch.allclose(out1[0, :5], out2[0, :5], atol=1e-6)
+
+
+class TestGQAWithWindowSize:
+    """Test GQA with sliding window attention."""
+
+    def _make_config(self, **kwargs):
+        """Create a ModelConfig with sensible defaults."""
+        defaults = dict(
+            embed_dim=64,
+            num_heads=4,
+            num_kv_heads=2,
+            context_length=32,
+            vocab_size=1000,
+            num_layers=1,
+            dropout=0.0,
+        )
+        defaults.update(kwargs)
+        return ModelConfig(**defaults)
+
+    def test_window_output_shape(self) -> None:
+        """GQA with window_size produces correct output shape."""
+        config = self._make_config()
+        gqa = GroupedQueryAttention(config, window_size=4)
+        x = torch.randn(2, 16, 64)
+        out = gqa(x)
+        assert out.shape == (2, 16, 64)
+
+    def test_window_limits_attention(self) -> None:
+        """Sliding window should limit attention to local context.
+
+        Changing tokens far in the past (beyond window) should NOT
+        affect tokens near the end.
+        """
+        config = self._make_config(embed_dim=32, num_heads=2, num_kv_heads=1)
+        gqa = GroupedQueryAttention(config, window_size=4)
+        gqa.eval()
+
+        x1 = torch.randn(1, 16, 32)
+        x2 = x1.clone()
+        # Change token 0 -- this is beyond window_size=4 from token 15
+        x2[0, 0] = torch.randn(32)
+
+        with torch.no_grad():
+            out1 = gqa(x1)
+            out2 = gqa(x2)
+
+        # Token 15 should NOT be affected by changing token 0
+        # (window_size=4 means token 15 only sees tokens 12-15)
+        assert torch.allclose(out1[0, -1], out2[0, -1], atol=1e-6)
+
+    def test_window_gradient_flow(self) -> None:
+        """Gradients flow through GQA with sliding window."""
+        config = self._make_config()
+        gqa = GroupedQueryAttention(config, window_size=8)
+        x = torch.randn(2, 16, 64, requires_grad=True)
+        out = gqa(x)
+        out.sum().backward()
+        assert x.grad is not None
+
+    def test_window_with_rope(self) -> None:
+        """GQA with both RoPE and sliding window works."""
+        config = self._make_config()
+        head_dim = config.embed_dim // config.num_heads
+        rope = RoPE(d_model=head_dim, max_seq_len=config.context_length)
+        gqa = GroupedQueryAttention(config, rope=rope, window_size=8)
+        x = torch.randn(1, 16, 64)
+        out = gqa(x)
+        assert out.shape == (1, 16, 64)
