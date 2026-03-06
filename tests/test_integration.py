@@ -7,7 +7,7 @@ import pytest
 import torch
 from torch.utils.data import DataLoader, TensorDataset
 
-from lmt.models.config import ModelConfigPresets
+from lmt.models.config import ModelConfig, ModelConfigPresets
 from lmt.models.gpt import GPT
 from lmt.tokenizer.bpe import BPETokenizer
 from lmt.training.config import BaseTrainingConfig
@@ -402,4 +402,118 @@ class TestEndToEndTraining:
 
         assert final_loss < initial_loss, (
             'Loss should decrease with overfitting'
+        )
+
+
+class TestMoETrainingIntegration:
+    """Integration tests for MoE model training with aux_loss."""
+
+    def _make_config(self, **kwargs: object) -> ModelConfig:
+        """Create a small config for testing."""
+        defaults = {
+            'vocab_size': 256,
+            'embed_dim': 64,
+            'num_heads': 4,
+            'num_kv_heads': 4,
+            'num_layers': 2,
+            'context_length': 32,
+            'dropout': 0.0,
+        }
+        defaults.update(kwargs)
+        return ModelConfig(**defaults)
+
+    def test_mixtral_training_with_aux_loss(self) -> None:
+        """Mixtral training loop includes load balancing loss."""
+        from lmt.models.mixtral import Mixtral
+
+        config = self._make_config()
+        model = Mixtral(config, num_experts=4, top_k=2)
+
+        inputs = torch.randint(0, 256, (12, 16))
+        targets = torch.randint(0, 256, (12, 16))
+        dataset = TensorDataset(inputs, targets)
+        loader = DataLoader(dataset, batch_size=4)
+
+        training_config = BaseTrainingConfig(
+            num_epochs=2,
+            eval_freq=1,
+            eval_iter=1,
+            learning_rate=1e-3,
+            weight_decay=0.0,
+            device='cpu',
+            aux_loss_coeff=0.01,
+        )
+
+        trainer = Trainer(model, loader, loader, training_config)
+        result = trainer.train()
+
+        assert len(result['train_losses']) > 0
+        # aux_loss should be non-negative after forward pass
+        assert model.aux_loss.item() >= 0.0
+
+    def test_deepseek_training_with_aux_loss(self) -> None:
+        """DeepSeek-V2 training loop includes load balancing loss."""
+        from lmt.models.deepseek import DeepSeekV2
+
+        config = self._make_config()
+        model = DeepSeekV2(
+            config,
+            kv_compress_dim=32,
+            q_compress_dim=32,
+            rope_dim=8,
+            num_experts=4,
+            top_k=2,
+        )
+
+        inputs = torch.randint(0, 256, (12, 16))
+        targets = torch.randint(0, 256, (12, 16))
+        dataset = TensorDataset(inputs, targets)
+        loader = DataLoader(dataset, batch_size=4)
+
+        training_config = BaseTrainingConfig(
+            num_epochs=2,
+            eval_freq=1,
+            eval_iter=1,
+            learning_rate=1e-3,
+            weight_decay=0.0,
+            device='cpu',
+            aux_loss_coeff=0.01,
+        )
+
+        trainer = Trainer(model, loader, loader, training_config)
+        result = trainer.train()
+
+        assert len(result['train_losses']) > 0
+        assert model.aux_loss.item() >= 0.0
+
+    def test_moe_loss_decreases_during_training(self) -> None:
+        """MoE model loss decreases when training with aux_loss."""
+        from lmt.models.mixtral import Mixtral
+
+        config = self._make_config()
+        model = Mixtral(config, num_experts=4, top_k=2)
+
+        # Small repeating dataset to encourage overfitting
+        inputs = torch.randint(0, 256, (4, 8))
+        targets = torch.randint(0, 256, (4, 8))
+        dataset = TensorDataset(inputs, targets)
+        loader = DataLoader(dataset, batch_size=2, shuffle=False)
+
+        training_config = BaseTrainingConfig(
+            num_epochs=10,
+            eval_freq=5,
+            eval_iter=2,
+            learning_rate=1e-2,
+            weight_decay=0.0,
+            device='cpu',
+            aux_loss_coeff=0.01,
+        )
+
+        trainer = Trainer(model, loader, loader, training_config)
+        result = trainer.train()
+
+        initial_loss = result['train_losses'][0]
+        final_loss = result['train_losses'][-1]
+        assert final_loss < initial_loss, (
+            f'MoE loss should decrease: {initial_loss:.3f} -> {final_loss:.3f}'
         )
