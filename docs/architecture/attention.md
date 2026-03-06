@@ -1,6 +1,6 @@
 # Attention Mechanisms
 
-LMT implements four attention variants, each building on the last.
+LMT implements five attention variants, each building on the last.
 
 ## Multi-Head Attention (MHA)
 
@@ -128,9 +128,35 @@ the middle" and prevents weight absorption. By separating content and
 position into independent paths, MLA gets both compression efficiency
 and positional encoding.
 
+## Flash Attention
+
+From Dao et al. (2022). Used in virtually all modern LLMs.
+
+**Key idea**: Standard attention materializes the full $N \times N$ score
+matrix, which is memory-bound on GPUs. Flash Attention processes Q and K/V
+in **tiles**, using **online softmax** to avoid ever storing the full matrix.
+
+The result is mathematically identical to standard attention, but uses
+$O(N)$ HBM memory instead of $O(N^2)$.
+
+```python
+from lmt.layers.attention import FlashAttention
+
+config = ModelConfig(embed_dim=256, num_heads=8, ...)
+flash = FlashAttention(config, block_size=64)
+```
+
+Our implementation is a **pure Python educational version** demonstrating the
+tiling algorithm. For production, use PyTorch's `scaled_dot_product_attention`.
+
+See [Flash Attention](flash-attention.md) for the full algorithm walkthrough.
+
+---
+
 ## References
 
 - Vaswani et al., [*Attention Is All You Need*](https://arxiv.org/abs/1706.03762) (2017) -- multi-head attention
 - Ainslie et al., [*GQA: Training Generalized Multi-Query Transformer Models from Multi-Head Checkpoints*](https://arxiv.org/abs/2305.13245) (2023) -- grouped query attention
 - Beltagy et al., [*Longformer: The Long-Document Transformer*](https://arxiv.org/abs/2004.05150) (2020) -- sliding window attention
 - DeepSeek-AI, [*DeepSeek-V2: A Strong, Economical, and Efficient Mixture-of-Experts Language Model*](https://arxiv.org/abs/2405.04434) (2024) -- multi-head latent attention
+- Dao et al., [*FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness*](https://arxiv.org/abs/2205.14135) (2022) -- flash attention
