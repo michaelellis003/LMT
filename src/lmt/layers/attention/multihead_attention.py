@@ -31,13 +31,9 @@ class MultiHeadAttention(nn.Module):
     def __init__(self, model_config: ModelConfig):
         """Initialize the Multi-Head Attention layer.
 
-        Instead of a single attention 'head' as in the SelfAttention or
-        CausalAttention classes, MultiHeadAttention calculates attention
-        weights using `num_heads` self-attention mechanisms each
-        with causal masks in parallel. The output of the `num_heads`
-        self-attention heads are concatenated together and applied to the
-        queries to produce the context vectors.
-
+        Uses ``num_heads`` parallel attention heads with causal masks.
+        A fused QKV projection splits into Q, K, V which are reshaped
+        into per-head tensors before scaled dot-product attention.
 
         Args:
             model_config (ModelConfig): Configuration object containing model

@@ -152,8 +152,8 @@ class MultiTokenPredictionHead(nn.Module):
         prev_hidden = hidden
         for _k, layer in enumerate(self.future_layers):
             if targets is not None:
-                # Teacher forcing: shift targets by k positions
-                # For head k+1, embed the token at position t+k
+                # Teacher forcing: embed the target tokens as
+                # context for the next prediction head
                 prev_tokens = targets
             else:
                 # Inference: use argmax of previous head
