@@ -21,6 +21,13 @@ from .multihead_attention import MultiHeadAttention
 from .self_attention import SelfAttention
 from .sliding_window_attention import SlidingWindowAttention
 
+ATTENTION_REGISTRY: dict[str, type] = {
+    'mha': MultiHeadAttention,
+    'gqa': GroupedQueryAttention,
+    'sliding_window': SlidingWindowAttention,
+    'mla': MultiHeadLatentAttention,
+}
+
 __all__ = [
     'SelfAttention',
     'CausalAttention',
@@ -28,4 +35,5 @@ __all__ = [
     'GroupedQueryAttention',
     'SlidingWindowAttention',
     'MultiHeadLatentAttention',
+    'ATTENTION_REGISTRY',
 ]
