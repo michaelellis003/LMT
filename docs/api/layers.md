@@ -20,6 +20,12 @@
 
 ::: lmt.layers.normalization.RMSNorm
 
+## Attention Utilities
+
+::: lmt.layers.attention.KVCache
+
 ## Positional Encoding
 
 ::: lmt.layers.positional.RoPE
+
+::: lmt.layers.positional.ALiBi
