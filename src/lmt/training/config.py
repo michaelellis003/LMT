@@ -36,7 +36,6 @@ class BaseTrainingConfig:
         device (str): The device to use for training
             (e.g., 'cpu', 'cuda', 'mps').
         save_dir (str): The directory where training artifacts will be saved.
-        **kwargs: Any additional configuration parameters.
     """
 
     def __init__(
