@@ -1,0 +1,88 @@
+site_name: LMT - Language Modeling using Transformers
+site_url: https://michaelellis003.github.io/LMT/
+site_description: An educational PyTorch library for understanding transformer architectures
+site_author: Michael Ellis
+repo_url: https://github.com/michaelellis003/LMT
+repo_name: michaelellis003/LMT
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: deep purple
+      accent: amber
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: deep purple
+      accent: amber
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - content.code.copy
+    - content.code.annotate
+    - toc.follow
+  icon:
+    repo: fontawesome/brands/github
+
+markdown_extensions:
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.details
+  - pymdownx.tabbed:
+      alternate_style: true
+  - admonition
+  - toc:
+      permalink: true
+  - attr_list
+  - md_in_html
+
+extra_javascript:
+  - javascripts/mathjax.js
+  - https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js
+  - javascripts/attention-viz.js
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [src]
+          options:
+            show_source: true
+            show_root_heading: true
+            heading_level: 3
+            docstring_style: google
+
+nav:
+  - Home: index.md
+  - Getting Started: getting-started.md
+  - Architecture Guide:
+      - Transformer Family Tree: architecture/family-tree.md
+      - Overview: architecture/overview.md
+      - Attention Mechanisms: architecture/attention.md
+      - Feed-Forward Networks: architecture/ffn.md
+      - Normalization: architecture/normalization.md
+      - Positional Encoding: architecture/positional.md
+  - Models:
+      - GPT: models/gpt.md
+      - LLaMA: models/llama.md
+      - Mixtral: models/mixtral.md
+  - Interactive:
+      - Attention Patterns: visualizations/attention-patterns.md
+  - API Reference:
+      - Layers: api/layers.md
+      - Models: api/models.md
+      - Training: api/training.md

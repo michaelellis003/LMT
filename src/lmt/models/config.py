@@ -47,6 +47,8 @@ class ModelConfig:
     dropout: float = 0.1
     qkv_bias: bool = False
     ff_network: Module | None = None
+    num_kv_heads: int | None = None  # None = num_heads (standard MHA)
+    window_size: int | None = None  # None = full attention
 
 
 class ModelConfigPresets:

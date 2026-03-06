@@ -20,3 +20,10 @@ scripts/models/*
 # Data files
 data/*.csv
 data/*.tsv
+
+# Documentation build output
+site/
+
+# Environment files
+.env
+.env.*

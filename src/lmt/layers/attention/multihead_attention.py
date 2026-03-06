@@ -113,7 +113,9 @@ class MultiHeadAttention(nn.Module):
         causal_mask = self.causal_mask[:seq_length, :seq_length]
         attn_scores = attn_scores + causal_mask
 
-        attn_weights = nn.functional.softmax(attn_scores, dim=-1)
+        attn_weights = torch.softmax(attn_scores.float(), dim=-1).to(
+            queries.dtype
+        )
 
         context_vec = (attn_weights @ values).transpose(1, 2)
         context_vec = context_vec.contiguous().view(
