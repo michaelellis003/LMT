@@ -232,6 +232,29 @@ class TestTrainingSmoke:
             f'(random={random_loss:.3f})'
         )
 
+    def test_ssd_learns(self) -> None:
+        """SSD (linear attention with decay) should also learn."""
+        model, train_loader, val_loader, _, random_loss = (
+            self._make_model_and_data(
+                BlockConfig(
+                    attention='ssd',
+                    ffn='swiglu',
+                    norm='rmsnorm',
+                )
+            )
+        )
+
+        # SSD is simpler than GDN (no delta rule) but should still learn
+        epoch_losses = self._train_loop(
+            model, train_loader, num_epochs=50, lr=5e-4
+        )
+
+        assert epoch_losses[-1] < epoch_losses[0]
+        assert epoch_losses[-1] < random_loss * 0.8, (
+            f'SSD final loss {epoch_losses[-1]:.3f} too high '
+            f'(random={random_loss:.3f})'
+        )
+
     def test_loss_monotonically_trends_down(self) -> None:
         """Loss should generally trend downward, not oscillate wildly.
 

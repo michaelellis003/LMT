@@ -1,6 +1,6 @@
 # Attention Mechanisms
 
-LMT implements six attention variants, each building on the last.
+LMT implements seven attention variants, each building on the last.
 
 ## Multi-Head Attention (MHA)
 
@@ -212,6 +212,57 @@ compresses context lossily.
 
 ---
 
+## Structured State Space Duality (SSD)
+
+From Dao & Gu (2024). The theoretical foundation for Mamba-2.
+
+**Key idea**: SSMs with scalar decay and linear attention are
+mathematically equivalent -- two different algorithms for the
+same matrix-vector product.
+
+### The Duality
+
+Given a selective SSM with scalar \(a_t\):
+
+\[
+h_t = a_t h_{t-1} + k_t v_t^\top, \quad o_t = h_t q_t
+\]
+
+the output can equivalently be computed as:
+
+\[
+Y = (L \odot Q K^\top) V
+\]
+
+where \(L\) is a lower-triangular decay mask:
+
+\[
+L_{ij} = \prod_{s=j+1}^{i} a_s
+\]
+
+When all \(a_t = 1\), \(L\) becomes the standard causal mask and the
+model is exactly **causal linear attention**.
+
+```python
+from lmt.layers.attention import SSDAttention
+
+config = ModelConfig(embed_dim=256, num_heads=8, ...)
+ssd = SSDAttention(config)
+
+# Both produce identical outputs:
+y_recurrent = ssd.forward_recurrent(x)
+y_quadratic = ssd.forward_quadratic(x)
+```
+
+**Our implementation** exposes both forms and verifies they match,
+serving as a concrete replication of the paper's core claim.
+
+**Relation to GatedDeltaNet**: SSD is a strict simplification --
+no delta rule correction. GatedDeltaNet adds the associative memory
+update \(\beta(v - Sk)k^\top\) on top of SSD's decay mechanism.
+
+---
+
 ## References
 
 - Vaswani et al., [*Attention Is All You Need*](https://arxiv.org/abs/1706.03762) (2017) -- multi-head attention
@@ -220,3 +271,4 @@ compresses context lossily.
 - DeepSeek-AI, [*DeepSeek-V2: A Strong, Economical, and Efficient Mixture-of-Experts Language Model*](https://arxiv.org/abs/2405.04434) (2024) -- multi-head latent attention
 - Dao et al., [*FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness*](https://arxiv.org/abs/2205.14135) (2022) -- flash attention
 - Yang et al., [*Gated Delta Networks: Improving Mamba2 with Delta Rule*](https://arxiv.org/abs/2412.06464) (2024) -- gated delta networks
+- Dao & Gu, [*Transformers are SSMs: Generalized Models and Efficient Algorithms Through Structured State Space Duality*](https://arxiv.org/abs/2405.21060) (2024) -- structured state space duality
