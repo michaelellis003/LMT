@@ -60,3 +60,16 @@ for different ranges of context.
 - [`ALiBi`](../api/layers.md): `src/lmt/layers/positional/alibi.py`
 - Both are registered in the positional encoding registry and can be
   swapped via configuration.
+
+## References & Further Reading
+
+- Su et al., [*RoFormer: Enhanced Transformer with Rotary Position Embedding*](https://arxiv.org/abs/2104.09864) (2021) -- RoPE
+- Press et al., [*Train Short, Test Long: Attention with Linear Biases Enables Input Length Extrapolation*](https://arxiv.org/abs/2108.12409) (2022) -- ALiBi
+- Vaswani et al., [*Attention Is All You Need*](https://arxiv.org/abs/1706.03762) (2017) -- sinusoidal positional encoding
+- Brenndoerfer, [*Position Encoding Comparison*](https://mbrenndoerfer.com/writing/position-encoding-comparison-transformers) -- comprehensive guide with static visualizations and extrapolation analysis
+- [*Positional Embeddings in Transformer Models*](https://iclr-blogposts.github.io/2025/blog/positional-embedding/) (ICLR 2025 Blog) -- survey of positional encoding evolution
+
+Our visualization is an original interactive Canvas implementation. While the
+concept of comparing positional encodings is well-established (see resources
+above), our specific combination of live heatmaps, decay curves, and per-head
+ALiBi slope visualization with real-time parameter adjustment is our own design.
