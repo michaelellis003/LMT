@@ -16,6 +16,7 @@
 
 from .causal_attention import CausalAttention
 from .grouped_query_attention import GroupedQueryAttention
+from .kv_cache import KVCache
 from .multi_head_latent_attention import MultiHeadLatentAttention
 from .multihead_attention import MultiHeadAttention
 from .self_attention import SelfAttention
@@ -35,5 +36,6 @@ __all__ = [
     'GroupedQueryAttention',
     'SlidingWindowAttention',
     'MultiHeadLatentAttention',
+    'KVCache',
     'ATTENTION_REGISTRY',
 ]
