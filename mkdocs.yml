@@ -75,6 +75,7 @@ nav:
       - Transformer Family Tree: architecture/family-tree.md
       - Overview: architecture/overview.md
       - Attention Mechanisms: architecture/attention.md
+      - Flash Attention: architecture/flash-attention.md
       - Feed-Forward Networks: architecture/ffn.md
       - Normalization: architecture/normalization.md
       - Positional Encoding: architecture/positional.md
