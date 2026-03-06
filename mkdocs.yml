@@ -79,6 +79,7 @@ nav:
       - Feed-Forward Networks: architecture/ffn.md
       - Normalization: architecture/normalization.md
       - Positional Encoding: architecture/positional.md
+      - Multi-Token Prediction: architecture/multi-token-prediction.md
   - Models:
       - GPT: models/gpt.md
       - LLaMA: models/llama.md
