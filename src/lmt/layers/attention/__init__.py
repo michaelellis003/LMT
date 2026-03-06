@@ -16,6 +16,7 @@
 
 from .causal_attention import CausalAttention
 from .grouped_query_attention import GroupedQueryAttention
+from .multi_head_latent_attention import MultiHeadLatentAttention
 from .multihead_attention import MultiHeadAttention
 from .self_attention import SelfAttention
 from .sliding_window_attention import SlidingWindowAttention
@@ -26,4 +27,5 @@ __all__ = [
     'MultiHeadAttention',
     'GroupedQueryAttention',
     'SlidingWindowAttention',
+    'MultiHeadLatentAttention',
 ]
