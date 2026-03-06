@@ -53,6 +53,7 @@ extra_javascript:
   - javascripts/mathjax.js
   - https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js
   - javascripts/attention-viz.js
+  - javascripts/rope-viz.js
 
 plugins:
   - search
@@ -82,6 +83,7 @@ nav:
       - Mixtral: models/mixtral.md
   - Interactive:
       - Attention Patterns: visualizations/attention-patterns.md
+      - RoPE Explorer: visualizations/rope-explorer.md
   - API Reference:
       - Layers: api/layers.md
       - Models: api/models.md
