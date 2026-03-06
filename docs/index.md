@@ -62,6 +62,13 @@ x = torch.randint(0, config.vocab_size, (1, 128))
 logits = model(x)  # [1, 128, 32000]
 ```
 
+## Interactive Explorations
+
+Learn by experimenting, not just reading:
+
+- [**Attention Pattern Explorer**](visualizations/attention-patterns.md) --
+  see how causal, sliding window, and sparse attention masks actually look
+
 ## Design Principles
 
 1. **Readability first** -- code should read like a textbook
