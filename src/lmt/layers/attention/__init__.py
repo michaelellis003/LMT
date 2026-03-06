@@ -15,6 +15,7 @@
 """Implementation of various attention mechanisms."""
 
 from .flash_attention import FlashAttention
+from .gated_delta_net import GatedDeltaNet
 from .grouped_query_attention import GroupedQueryAttention
 from .kv_cache import KVCache
 from .multi_head_latent_attention import MultiHeadLatentAttention
@@ -27,11 +28,13 @@ ATTENTION_REGISTRY: dict[str, type] = {
     'sliding_window': SlidingWindowAttention,
     'mla': MultiHeadLatentAttention,
     'flash': FlashAttention,
+    'gated_delta_net': GatedDeltaNet,
 }
 
 __all__ = [
     'MultiHeadAttention',
     'FlashAttention',
+    'GatedDeltaNet',
     'GroupedQueryAttention',
     'SlidingWindowAttention',
     'MultiHeadLatentAttention',
