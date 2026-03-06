@@ -80,6 +80,8 @@ nav:
       - Normalization: architecture/normalization.md
       - Positional Encoding: architecture/positional.md
       - Multi-Token Prediction: architecture/multi-token-prediction.md
+      - YaRN Context Extension: architecture/yarn.md
+      - Mixture of Depths: architecture/mixture-of-depths.md
   - Models:
       - GPT: models/gpt.md
       - LLaMA: models/llama.md
