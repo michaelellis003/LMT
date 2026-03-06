@@ -25,6 +25,7 @@ drastically reduce cache size with minimal quality loss.
 from __future__ import annotations
 
 import math
+from typing import TYPE_CHECKING
 
 import torch
 import torch.nn as nn
@@ -33,8 +34,6 @@ from torch import Tensor
 from lmt.layers.attention.kv_cache import KVCache
 from lmt.models.config import ModelConfig
 
-# Avoid circular import -- RoPE is only needed at runtime
-TYPE_CHECKING = False
 if TYPE_CHECKING:
     from lmt.layers.positional import RoPE
 

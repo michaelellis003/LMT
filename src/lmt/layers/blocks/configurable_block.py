@@ -12,6 +12,7 @@ expressed as configuration rather than custom code.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 import torch.nn as nn
 from torch import Tensor
@@ -27,7 +28,6 @@ from lmt.layers.ffn.moe import MoEFeedForward
 from lmt.layers.normalization import NORM_REGISTRY
 from lmt.models.config import ModelConfig
 
-TYPE_CHECKING = False
 if TYPE_CHECKING:
     from lmt.layers.positional import RoPE
 

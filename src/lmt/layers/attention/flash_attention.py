@@ -192,8 +192,6 @@ class FlashAttention(nn.Module):
         block_size: Tile size for the Flash Attention algorithm.
     """
 
-    causal_mask: torch.Tensor
-
     def __init__(
         self,
         model_config: ModelConfig,
