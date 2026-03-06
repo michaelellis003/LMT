@@ -90,3 +90,10 @@ The key benefit: a model with 8 experts and top-k=2 has 8x the
 parameters of a dense model but only 2x the compute per token.
 This is how Mixtral-8x7B achieves 47B total parameters but runs
 at the cost of a 13B model.
+
+## References
+
+- Shazeer, [*GLU Variants Improve Transformer*](https://arxiv.org/abs/2002.05202) (2020) -- SwiGLU
+- Shazeer et al., [*Outrageously Large Neural Networks: The Sparsely-Gated Mixture-of-Experts Layer*](https://arxiv.org/abs/1701.06538) (2017) -- mixture of experts
+- Fedus et al., [*Switch Transformers: Scaling to Trillion Parameter Models with Simple and Efficient Sparsity*](https://arxiv.org/abs/2101.03961) (2022) -- switch transformer
+- Jiang et al., [*Mixtral of Experts*](https://arxiv.org/abs/2401.04088) (2024) -- Mixtral architecture

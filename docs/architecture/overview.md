@@ -104,3 +104,7 @@ moe = MoEFeedForward(d_model=256, num_experts=8, top_k=2)
 out = moe(x)             # clean return: just the tensor
 loss = moe.aux_loss      # auxiliary output on attribute
 ```
+
+## References
+
+- Vaswani et al., [*Attention Is All You Need*](https://arxiv.org/abs/1706.03762) (2017) -- the original transformer
