@@ -29,8 +29,13 @@ def calc_loss_batch(
     model: nn.Module,
     device: torch.device,
     task_type: str = 'pretraining',
+    aux_loss_coeff: float = 0.0,
 ) -> torch.Tensor:
     """Calculates loss for a batch based on task type.
+
+    Optionally adds auxiliary loss from MoE models. If the model has
+    an ``aux_loss`` attribute (e.g. Mixtral, DeepSeek-V2), it is
+    scaled by ``aux_loss_coeff`` and added to the main loss.
 
     Args:
         input_batch_ids (torch.Tensor): The input tensor containing token IDs
@@ -41,6 +46,8 @@ def calc_loss_batch(
             the logits.
         device (torch.device): The device on which to perform the calculations.
         task_type (str): Either 'pretraining' or 'classification'
+        aux_loss_coeff (float): Coefficient for auxiliary loss from MoE
+            models. Set to 0.0 to disable. Typical value: 0.01.
 
     Returns:
         torch.Tensor: A scalar tensor representing the calculated loss.
@@ -61,6 +68,11 @@ def calc_loss_batch(
             loss = nn.functional.cross_entropy(logits, target_batch)
         case _:
             raise ValueError(f'Unknown task_type: {task_type}')
+
+    # Add auxiliary loss from MoE models if available
+    if aux_loss_coeff > 0.0 and hasattr(model, 'aux_loss'):
+        aux_loss: torch.Tensor = model.aux_loss  # type: ignore[assignment]
+        loss = loss + aux_loss_coeff * aux_loss
 
     return loss
 
