@@ -78,19 +78,37 @@ across the full sequence -- layer \(l\) can see \(l \times w\) tokens back.
 
 From DeepSeek-AI (2024). The most aggressive KV cache compression.
 
-**Key idea**: Instead of caching full K and V tensors, compress them
-into a shared low-rank latent:
+**Key idea**: Compress KV into a shared low-rank latent, and use
+**decoupled RoPE** to separate content from positional information.
+
+### Content Path (compressed)
 
 \[
-c_t^{KV} = x_t W^{DKV} \quad \text{(compress to latent)}
+c_t^{KV} = x_t W^{DKV}, \quad k_C = c^{KV} W^{UK}, \quad v = c^{KV} W^{UV}
 \]
 
 \[
-[k_t, v_t] = c_t^{KV} W^{UKV} \quad \text{(decompress for attention)}
+c_t^Q = x_t W^{DQ}, \quad q_C = c^Q W^{UQ}
 \]
 
-At inference, only \(c_t^{KV}\) is cached. If `kv_compress_dim << num_heads * head_dim`,
-the savings are massive.
+### Positional Path (decoupled RoPE)
+
+\[
+q_R = \text{RoPE}(c^Q \cdot W^{QR}), \quad k_R = \text{RoPE}(x_t \cdot W^{KR})
+\]
+
+Note the **asymmetry**: \(q_R\) derives from the query latent \(c^Q\),
+but \(k_R\) derives from the raw input \(x_t\). This is critical for
+the weight absorption trick to work.
+
+### Final Attention
+
+\[
+Q = [q_C; q_R], \quad K = [k_C; k_R], \quad \text{Attn}(Q, K, V)
+\]
+
+At inference, only \(c_t^{KV}\) and \(k_R\) are cached -- up to 93%
+memory reduction vs standard MHA.
 
 ```python
 from lmt.layers.attention import MultiHeadLatentAttention
@@ -100,9 +118,12 @@ mla = MultiHeadLatentAttention(
     config,
     kv_compress_dim=64,   # much smaller than 256
     q_compress_dim=64,
+    rope_dim=16,          # small positional vectors
 )
 ```
 
-**The insight**: K and V share the same compressed representation,
-forcing the model to learn a joint low-rank factorization of the
-key-value space.
+**Why decoupled RoPE?** Standard RoPE applied to compressed vectors
+breaks the low-rank structure -- the rotation matrix gets "stuck in
+the middle" and prevents weight absorption. By separating content and
+position into independent paths, MLA gets both compression efficiency
+and positional encoding.
