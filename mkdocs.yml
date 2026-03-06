@@ -82,6 +82,7 @@ nav:
       - GPT: models/gpt.md
       - LLaMA: models/llama.md
       - Mixtral: models/mixtral.md
+      - DeepSeek-V2: models/deepseek.md
   - Interactive:
       - Attention Patterns: visualizations/attention-patterns.md
       - RoPE Explorer: visualizations/rope-explorer.md
