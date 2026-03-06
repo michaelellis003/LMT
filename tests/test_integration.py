@@ -486,6 +486,34 @@ class TestMoETrainingIntegration:
         assert len(result['train_losses']) > 0
         assert model.aux_loss.item() >= 0.0
 
+    def test_mamba_training_integration(self) -> None:
+        """Mamba model trains successfully without attention."""
+        from lmt.models.mamba import Mamba
+
+        config = self._make_config()
+        model = Mamba(config, d_state=8, expand=2, d_conv=4)
+
+        inputs = torch.randint(0, 256, (12, 16))
+        targets = torch.randint(0, 256, (12, 16))
+        dataset = TensorDataset(inputs, targets)
+        loader = DataLoader(dataset, batch_size=4)
+
+        training_config = BaseTrainingConfig(
+            num_epochs=2,
+            eval_freq=1,
+            eval_iter=1,
+            learning_rate=1e-3,
+            weight_decay=0.0,
+            device='cpu',
+        )
+
+        trainer = Trainer(model, loader, loader, training_config)
+        result = trainer.train()
+
+        assert len(result['train_losses']) > 0
+        # No aux_loss for Mamba (no MoE)
+        assert not hasattr(model, 'aux_loss')
+
     def test_moe_loss_decreases_during_training(self) -> None:
         """MoE model loss decreases when training with aux_loss."""
         from lmt.models.mixtral import Mixtral
