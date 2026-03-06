@@ -1,6 +1,6 @@
 [project]
 name = "pylmt"
-version = "0.2.10"
+version = "0.3.0"
 description = "A PyTorch implementation of transformer-based language models including GPT architecture for pretraining and fine-tuning"
 authors = [
     {name = "Michael Ellis",email = "michaelellis003@gmail.com"}

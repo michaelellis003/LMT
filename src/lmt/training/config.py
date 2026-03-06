@@ -68,7 +68,7 @@ class BaseTrainingConfig:
             save_dir (str, optional): The directory where training artifacts
                 will be saved. Defaults to 'runs'.
             task (str): Training task (e.g. pretraining or classification)
-            **kwargs: Additional keyword arguments to be stored as attributes.
+            **kwargs (Any): Additional keyword arguments stored as attributes.
         """
         self.num_epochs = num_epochs
         self.eval_freq = eval_freq

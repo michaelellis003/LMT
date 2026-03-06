@@ -39,21 +39,16 @@ class Trainer:
     optimizer setup, and basic state tracking for training.
 
     Attributes:
-            model (nn.Module): The PyTorch model to train, moved to the
-                specified device.
-            train_loader (DataLoader): The data loader for the training set.
-            val_loader (DataLoader): The data loader for the validation set.
-            config (BaseTrainingConfig): The configuration object for training.
-            tokenizer (BaseTokenizer | None): The tokenizer instance, if
-                provided.
-            device (torch.device): The device (e.g., 'cuda', 'cpu') the model
-                is on.
-            optimizer (torch.optim.Optimizer): The optimizer for updating
-                model weights.
-            train_losses (list): A list to store training loss values per step.
-            val_losses (list): A list to store validation loss values.
-            global_step (int): A counter for the number of training steps
-                completed.
+        model: The PyTorch model to train, moved to the specified device.
+        train_loader: The data loader for the training set.
+        val_loader: The data loader for the validation set.
+        config: The configuration object for training.
+        tokenizer: The tokenizer instance, if provided.
+        device: The device (e.g., 'cuda', 'cpu') the model is on.
+        optimizer: The optimizer for updating model weights.
+        train_losses: A list to store training loss values per step.
+        val_losses: A list to store validation loss values.
+        global_step: A counter for the number of training steps completed.
     """
 
     def __init__(
