@@ -39,3 +39,8 @@ model = GPT(config)
       members:
         - __init__
         - forward
+
+## References
+
+- Radford et al., [*Improving Language Understanding by Generative Pre-Training*](https://cdn.openai.com/research-covers/language-unsupervised/language_understanding_paper.pdf) (2018) -- GPT-1
+- Radford et al., [*Language Models are Unsupervised Multitask Learners*](https://cdn.openai.com/better-language-models/language_models_are_unsupervised_multitask_learners.pdf) (2019) -- GPT-2

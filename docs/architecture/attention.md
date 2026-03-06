@@ -127,3 +127,10 @@ breaks the low-rank structure -- the rotation matrix gets "stuck in
 the middle" and prevents weight absorption. By separating content and
 position into independent paths, MLA gets both compression efficiency
 and positional encoding.
+
+## References
+
+- Vaswani et al., [*Attention Is All You Need*](https://arxiv.org/abs/1706.03762) (2017) -- multi-head attention
+- Ainslie et al., [*GQA: Training Generalized Multi-Query Transformer Models from Multi-Head Checkpoints*](https://arxiv.org/abs/2305.13245) (2023) -- grouped query attention
+- Beltagy et al., [*Longformer: The Long-Document Transformer*](https://arxiv.org/abs/2004.05150) (2020) -- sliding window attention
+- DeepSeek-AI, [*DeepSeek-V2: A Strong, Economical, and Efficient Mixture-of-Experts Language Model*](https://arxiv.org/abs/2405.04434) (2024) -- multi-head latent attention

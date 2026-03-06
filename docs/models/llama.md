@@ -63,3 +63,8 @@ This prevents the residual stream from growing too large in deep models.
       members:
         - __init__
         - forward
+
+## References
+
+- Touvron et al., [*LLaMA: Open and Efficient Foundation Language Models*](https://arxiv.org/abs/2302.13971) (2023) -- LLaMA
+- Touvron et al., [*Llama 2: Open Foundation and Fine-Tuned Chat Models*](https://arxiv.org/abs/2307.09288) (2023) -- LLaMA 2 (introduced GQA)

@@ -76,3 +76,8 @@ token (the router selects 2 of 8 experts). This means:
       members:
         - __init__
         - forward
+
+## References
+
+- Jiang et al., [*Mixtral of Experts*](https://arxiv.org/abs/2401.04088) (2024) -- Mixtral
+- Jiang et al., [*Mistral 7B*](https://arxiv.org/abs/2310.06825) (2023) -- sliding window attention in Mistral

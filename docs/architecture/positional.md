@@ -138,3 +138,8 @@ Both encode **relative** position — the attention between tokens depends
 on their distance, not their absolute positions. RoPE is more expressive
 (rotation captures directional relationships), while ALiBi is simpler
 and extrapolates better to unseen sequence lengths.
+
+## References
+
+- Su et al., [*RoFormer: Enhanced Transformer with Rotary Position Embedding*](https://arxiv.org/abs/2104.09864) (2021)
+- Press et al., [*Train Short, Test Long: Attention with Linear Biases Enables Input Length Extrapolation*](https://arxiv.org/abs/2108.12409) (2022)

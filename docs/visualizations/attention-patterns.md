@@ -107,3 +107,11 @@ block = ConfigurableBlock(config, block_cfg)
   MHA, GQA, MLA with math
 - [Transformer Family Tree](../architecture/family-tree.md) — how these
   patterns evolved over time
+
+## References
+
+- Vaswani et al., [*Attention Is All You Need*](https://arxiv.org/abs/1706.03762) (2017) -- original multi-head attention
+- Child et al., [*Generating Long Sequences with Sparse Transformers*](https://arxiv.org/abs/1904.10509) (2019) -- strided attention
+- Beltagy et al., [*Longformer*](https://arxiv.org/abs/2004.05150) (2020) -- global + local attention
+- Jiang et al., [*Mistral 7B*](https://arxiv.org/abs/2310.06825) (2023) -- sliding window attention
+- Yeh et al., [*AttentionViz*](https://catherinesyeh.github.io/attn-docs/) -- a different approach that visualizes *actual* model attention weights at scale (our tool shows theoretical mask patterns instead)
