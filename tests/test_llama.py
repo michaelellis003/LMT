@@ -36,7 +36,7 @@ class TestLLaMA:
         """LLaMA uses RoPE, so no learnable positional embedding."""
         config = self._make_config()
         model = LLaMA(config)
-        assert not hasattr(model, 'pos_embed')
+        assert model.pos_embed is None
 
     def test_uses_rmsnorm(self):
         """Verify LLaMA uses RMSNorm, not LayerNorm."""

@@ -1,81 +1,44 @@
-"""Implementation of GPT architecture with a few modifications.
+"""GPT (Generative Pre-trained Transformer) architecture.
 
-This module provides a `GPT` class that constructs a decoder-only
-transformer model, similar in architecture to the Generative Pre-trained
-Transformer (GPT) models. It handles token and positional embeddings,
-processes them through a series of transformer blocks, and projects the
-final output to vocabulary-sized logits for language modeling tasks.
+Implements a decoder-only transformer inspired by GPT-2:
+- **Multi-Head Attention** with fused QKV projection
+- **GELU Feed-Forward Network** (expand 4x, project back)
+- **LayerNorm** (pre-norm)
+- **Learned positional embeddings**
+
+Implemented as a thin wrapper around ``BaseModel`` with
+the appropriate ``BlockConfig`` (MHA + default FFN + LayerNorm).
 """
 
-import torch
-import torch.nn as nn
-
-from lmt.layers.transformers import TransformerBlock
-from lmt.models import ModelConfig
+from lmt.layers.blocks.configurable_block import BlockConfig
+from lmt.models.base import BaseModel
+from lmt.models.config import ModelConfig
 
 
-class GPT(nn.Module):
+class GPT(BaseModel):
     """A decoder-only Transformer model inspired by the GPT architecture.
 
-    This class assembles a complete GPT-style model from its core components.
-    It begins by creating a combined token and positional embedding for the
-    input sequence. This embedding is then passed through a stack of
-    `TransformerBlock` layers. Finally, a layer normalization is applied,
-    followed by a linear layer to produce the final logits over the vocabulary.
+    Composes Multi-Head Attention with GELU FFN, LayerNorm, and
+    learned positional embeddings via the shared BaseModel scaffold.
     """
 
-    def __init__(self, model_config: ModelConfig):
-        """Initializes the GPT model.
+    def __init__(self, model_config: ModelConfig) -> None:
+        """Initialize GPT model.
 
         Args:
-            model_config (ModelConfig): Configuration object containing model
-                hyperparameters such as vocabulary size, embedding dimension,
-                context length, number of layers, and dropout rate.
+            model_config: Configuration object containing model
+                hyperparameters such as vocabulary size, embedding
+                dimension, context length, number of layers, and
+                dropout rate.
         """
-        super().__init__()
-        self.tok_embed = nn.Embedding(
-            model_config.vocab_size, model_config.embed_dim
-        )
-        self.pos_embed = nn.Embedding(
-            model_config.context_length, model_config.embed_dim
-        )
-        self.dropout_embed = nn.Dropout(model_config.dropout)
-
-        self.transformer_blocks = nn.Sequential(
-            *[
-                TransformerBlock(model_config=model_config)
-                for _ in range(model_config.num_layers)
-            ]
+        block_config = BlockConfig(
+            attention='mha',
+            ffn='default',
+            norm='layernorm',
         )
 
-        self.final_norm = nn.LayerNorm(model_config.embed_dim)
-        self.out_head = nn.Linear(
-            model_config.embed_dim, model_config.vocab_size, bias=False
+        super().__init__(
+            model_config,
+            block_config=block_config,
+            learned_pos_embed=True,
         )
-
-    def forward(self, in_idx: torch.Tensor) -> torch.Tensor:
-        """Performs the forward pass of the GPT model.
-
-        This method processes an input tensor of token indices through the
-        model to generate logits for the next token prediction.
-
-        Args:
-            in_idx (torch.Tensor): A tensor of token indices.
-                Shape: `(batch_size, seq_length)`.
-
-        Returns:
-            torch.Tensor: The output logits from the model.
-                Shape: `(batch_size, seq_length, vocab_size)`.
-        """
-        _, seq_length = in_idx.shape
-        tok_embeds = self.tok_embed(in_idx)
-        pos_embeds = self.pos_embed(
-            torch.arange(seq_length, device=in_idx.device)
-        )
-        x = tok_embeds + pos_embeds
-        x = self.dropout_embed(x)
-        x = self.transformer_blocks(x)
-        x = self.final_norm(x)
-        logits = self.out_head(x)
-
-        return logits

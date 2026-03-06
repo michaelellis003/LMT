@@ -38,6 +38,7 @@ class BaseModel(nn.Module):
         self,
         config: ModelConfig,
         block_config: BlockConfig | None = None,
+        learned_pos_embed: bool = False,
     ) -> None:
         """Initialize BaseModel.
 
@@ -45,6 +46,10 @@ class BaseModel(nn.Module):
             config: Model configuration.
             block_config: Block component selection. If None, uses
                 defaults (GQA + SwiGLU + RMSNorm).
+            learned_pos_embed: If True, adds a learned positional
+                embedding (GPT-style). If False, positional info
+                comes from RoPE or other mechanisms in the attention
+                layer.
         """
         super().__init__()
         if block_config is None:
@@ -52,6 +57,14 @@ class BaseModel(nn.Module):
 
         self.config = config
         self.tok_embed = nn.Embedding(config.vocab_size, config.embed_dim)
+
+        self.pos_embed: nn.Embedding | None = None
+        if learned_pos_embed:
+            self.pos_embed = nn.Embedding(
+                config.context_length, config.embed_dim
+            )
+
+        self.drop = nn.Dropout(config.dropout)
 
         self.blocks = nn.ModuleList(
             [
@@ -107,6 +120,13 @@ class BaseModel(nn.Module):
             Logits tensor ``[batch, seq_len, vocab_size]``.
         """
         x = self.tok_embed(in_idx)
+
+        if self.pos_embed is not None:
+            seq_len = in_idx.shape[1]
+            positions = torch.arange(seq_len, device=in_idx.device)
+            x = x + self.pos_embed(positions)
+
+        x = self.drop(x)
 
         if self._has_moe:
             total_aux = torch.tensor(0.0, device=x.device)

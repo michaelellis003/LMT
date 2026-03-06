@@ -147,6 +147,12 @@ class ConfigurableBlock(nn.Module):
         elif key == 'swiglu':
             ffn_cls = FFN_REGISTRY['swiglu']
             return ffn_cls(d_model=model_config.embed_dim)
+        elif key == 'default':
+            ffn_cls = FFN_REGISTRY['default']
+            return ffn_cls(
+                embed_dim=model_config.embed_dim,
+                hidden_dim=4 * model_config.embed_dim,
+            )
         else:
             ffn_cls = FFN_REGISTRY[key]
             return ffn_cls(model_config.embed_dim)

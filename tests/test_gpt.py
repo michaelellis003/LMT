@@ -19,8 +19,8 @@ class TestGPT:
         # Check if model has expected components
         assert hasattr(model, 'tok_embed')
         assert hasattr(model, 'pos_embed')
-        assert hasattr(model, 'dropout_embed')
-        assert hasattr(model, 'transformer_blocks')
+        assert model.pos_embed is not None
+        assert hasattr(model, 'blocks')
         assert hasattr(model, 'final_norm')
         assert hasattr(model, 'out_head')
 
@@ -29,7 +29,7 @@ class TestGPT:
         assert model.tok_embed.embedding_dim == config.embed_dim
         assert model.pos_embed.num_embeddings == config.context_length
         assert model.pos_embed.embedding_dim == config.embed_dim
-        assert len(model.transformer_blocks) == config.num_layers
+        assert len(model.blocks) == config.num_layers
 
     def test_gpt_forward_pass_shape(self):
         """Test that GPT forward pass produces expected output shape."""

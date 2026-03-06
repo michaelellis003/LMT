@@ -14,13 +14,11 @@
 
 """Implementation of various attention mechanisms."""
 
-from .causal_attention import CausalAttention
 from .flash_attention import FlashAttention
 from .grouped_query_attention import GroupedQueryAttention
 from .kv_cache import KVCache
 from .multi_head_latent_attention import MultiHeadLatentAttention
 from .multihead_attention import MultiHeadAttention
-from .self_attention import SelfAttention
 from .sliding_window_attention import SlidingWindowAttention
 
 ATTENTION_REGISTRY: dict[str, type] = {
@@ -32,8 +30,6 @@ ATTENTION_REGISTRY: dict[str, type] = {
 }
 
 __all__ = [
-    'SelfAttention',
-    'CausalAttention',
     'MultiHeadAttention',
     'FlashAttention',
     'GroupedQueryAttention',
