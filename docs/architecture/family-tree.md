@@ -182,6 +182,7 @@ Here's how each model in the library maps to these innovations:
 | [LLaMA](../models/llama.md) | Pre-norm RMSNorm | GQA | SwiGLU | RoPE | Scaled residual |
 | [Mixtral](../models/mixtral.md) | Pre-norm RMSNorm | GQA + SWA | MoE (SwiGLU) | RoPE | Scaled residual |
 | [DeepSeek-V2](../models/deepseek.md) | Pre-norm RMSNorm | MLA | MoE (SwiGLU) | Decoupled RoPE | Scaled residual |
+| [Mamba](../models/mamba.md) | Pre-norm RMSNorm | **SSM** (no attention) | Integrated (gating) | Implicit (recurrence) | Scaled residual |
 
 All models can be built using the [`ConfigurableBlock`](../api/layers.md)
 system, which lets you mix and match these components via string keys.
