@@ -350,7 +350,7 @@ class TestTrainer:
         assert optimizer_params['weight_decay'] == weight_decay
 
     def test_trainer_global_step_increment(self):
-        """Test that global step is incremented correctly during training."""
+        """Test that global step increments exactly once per batch."""
         model_config = ModelConfigPresets.small_gpt(context_length=8)
         model = GPT(model_config)
 
@@ -372,17 +372,17 @@ class TestTrainer:
 
         trainer = Trainer(model, train_loader, val_loader, training_config)
 
-        initial_step = trainer.global_step
+        # global_step starts at -1, increments to 0 on first step
+        assert trainer.global_step == -1
 
-        # Perform a few training steps manually
         for i, (input_batch, target_batch) in enumerate(train_loader):
             trainer.optimizer.zero_grad()
             loss = trainer.train_step(input_batch, target_batch)
             loss.backward()
             trainer.optimizer.step()
-            trainer.global_step += 1  # This happens in the training loop
 
-            expected_step = (
-                initial_step + (i + 1) * 2
-            )  # +1 in train_step, +1 in loop
-            assert trainer.global_step == expected_step
+            # train_step increments global_step by exactly 1
+            assert trainer.global_step == i, (
+                f'After {i + 1} steps, global_step should be {i} '
+                f'but got {trainer.global_step}'
+            )

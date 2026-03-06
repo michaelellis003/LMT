@@ -181,7 +181,6 @@ class Trainer:
                 loss = self.train_step(input_batch, target_batch)
                 loss.backward()
                 self.optimizer.step()
-                self.global_step += 1
 
                 # Log step-level training loss to TensorBoard
                 if self.writer is not None:
