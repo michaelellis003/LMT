@@ -1,31 +1,31 @@
-r"""Multi-Head Latent Attention (MLA).
+r"""Multi-Head Latent Attention (MLA) with Decoupled RoPE.
 
 Implements the attention mechanism from:
     DeepSeek-AI, 2024 -- "DeepSeek-V2: A Strong, Economical, and
     Efficient Mixture-of-Experts Language Model"
 
 MLA compresses key-value representations into a low-rank latent
-space before attention, dramatically reducing KV cache size:
+space before attention, dramatically reducing KV cache size.
+
+The key innovation is **decoupled RoPE**: positional information
+is handled by separate small vectors (q_R, k_R) while content
+uses the compressed latent path. This solves the incompatibility
+between low-rank KV compression and rotary position encoding.
 
 .. math::
 
-    c_t^{KV} = x_t W^{DKV} \quad \text{(compress to latent)}
+    \text{Content: } c_t^{KV} = x_t W^{DKV}, \quad
+    k_C = c^{KV} W^{UK}, \quad v = c^{KV} W^{UV}
 
-    [k_t, v_t] = c_t^{KV} W^{UKV} \quad \text{(decompress for attn)}
+    \text{Position: } k_R = \text{RoPE}(x_t W^{KR})
 
-Query is similarly compressed:
+    \text{Query: } c^Q = x_t W^{DQ}, \quad
+    q_C = c^Q W^{UQ}, \quad q_R = \text{RoPE}(c^Q W^{QR})
 
-.. math::
+    Q = [q_C; q_R], \quad K = [k_C; k_R]
 
-    c_t^Q = x_t W^{DQ}, \quad q_t = c_t^Q W^{UQ}
-
-At inference time, only :math:`c_t^{KV}` is cached instead of
-the full K,V tensors. If ``kv_compress_dim << n_heads * head_dim``,
-this gives massive memory savings.
-
-The key insight: K and V share the same compressed representation,
-so the bottleneck forces the model to learn a joint low-rank
-factorization of the key-value space.
+At inference, only :math:`c_t^{KV}` and :math:`k_R` are cached,
+giving massive memory savings over standard MHA.
 """
 
 import math
@@ -34,16 +34,19 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 
+from lmt.layers.positional import RoPE
 from lmt.models.config import ModelConfig
 
 
 class MultiHeadLatentAttention(nn.Module):
-    r"""Multi-Head Latent Attention with KV compression.
+    r"""Multi-Head Latent Attention with KV compression and decoupled RoPE.
 
     Args:
         model_config: Model configuration.
         kv_compress_dim: Latent dimension for KV compression.
         q_compress_dim: Latent dimension for Q compression.
+        rope_dim: Dimension for decoupled RoPE vectors.
+            If 0, RoPE is disabled (pure content attention).
     """
 
     causal_mask: Tensor
@@ -53,6 +56,7 @@ class MultiHeadLatentAttention(nn.Module):
         model_config: ModelConfig,
         kv_compress_dim: int,
         q_compress_dim: int,
+        rope_dim: int = 0,
     ) -> None:
         """Initialize MLA.
 
@@ -60,6 +64,7 @@ class MultiHeadLatentAttention(nn.Module):
             model_config: Model configuration.
             kv_compress_dim: KV latent dimension.
             q_compress_dim: Q latent dimension.
+            rope_dim: Dimension for decoupled RoPE (0 = disabled).
         """
         super().__init__()
         embed_dim = model_config.embed_dim
@@ -69,19 +74,39 @@ class MultiHeadLatentAttention(nn.Module):
         self.num_heads = num_heads
         self.head_dim = embed_dim // num_heads
         self.kv_compress_dim = kv_compress_dim
-        self.scale = 1.0 / math.sqrt(self.head_dim)
+        self.rope_dim = rope_dim
 
-        # Q path: x -> compress -> decompress to full Q
+        # Effective head dim for Q@K includes RoPE dimensions
+        qk_dim = self.head_dim + rope_dim
+        self.scale = 1.0 / math.sqrt(qk_dim)
+
+        # Q content path: x -> compress -> decompress
         self.w_dq = nn.Linear(embed_dim, q_compress_dim, bias=False)
         self.w_uq = nn.Linear(
             q_compress_dim, num_heads * self.head_dim, bias=False
         )
 
-        # KV path: x -> compress -> decompress to K and V
+        # KV path: x -> compress -> decompress to K_content and V
         self.w_dkv = nn.Linear(embed_dim, kv_compress_dim, bias=False)
-        self.w_ukv = nn.Linear(
-            kv_compress_dim, 2 * num_heads * self.head_dim, bias=False
+        self.w_uk = nn.Linear(
+            kv_compress_dim, num_heads * self.head_dim, bias=False
         )
+        self.w_uv = nn.Linear(
+            kv_compress_dim, num_heads * self.head_dim, bias=False
+        )
+
+        # Decoupled RoPE projections (only if rope_dim > 0)
+        if rope_dim > 0:
+            # q_R derived from compressed query latent
+            self.w_qr = nn.Linear(
+                q_compress_dim, num_heads * rope_dim, bias=False
+            )
+            # k_R derived from input directly (NOT from KV latent)
+            self.w_kr = nn.Linear(embed_dim, num_heads * rope_dim, bias=False)
+            self.rope = RoPE(
+                d_model=rope_dim,
+                max_seq_len=model_config.context_length,
+            )
 
         self.out_proj = nn.Linear(embed_dim, embed_dim, bias=False)
 
@@ -94,7 +119,7 @@ class MultiHeadLatentAttention(nn.Module):
         )
 
     def forward(self, x: Tensor) -> Tensor:
-        """Apply multi-head latent attention.
+        """Apply multi-head latent attention with decoupled RoPE.
 
         Args:
             x: Input ``[batch, seq_len, embed_dim]``.
@@ -104,18 +129,54 @@ class MultiHeadLatentAttention(nn.Module):
         """
         b, seq_len, _ = x.shape
 
-        # Compress then decompress Q
-        q = self.w_uq(self.w_dq(x))
+        # Compress query
+        c_q = self.w_dq(x)  # [b, seq, q_compress_dim]
 
-        # Compress then decompress KV
-        c_kv = self.w_dkv(x)  # [b, seq, kv_compress_dim] -- the latent
-        kv = self.w_ukv(c_kv)  # [b, seq, 2 * num_heads * head_dim]
-        k, v = kv.chunk(2, dim=-1)
+        # Content Q: decompress from query latent
+        q_c = self.w_uq(c_q)  # [b, seq, num_heads * head_dim]
+        q_c = q_c.view(b, seq_len, self.num_heads, self.head_dim).transpose(
+            1, 2
+        )
 
-        # Reshape to multi-head: [b, heads, seq, head_dim]
-        q = q.view(b, seq_len, self.num_heads, self.head_dim).transpose(1, 2)
-        k = k.view(b, seq_len, self.num_heads, self.head_dim).transpose(1, 2)
+        # Compress KV
+        c_kv = self.w_dkv(x)  # [b, seq, kv_compress_dim]
+
+        # Content K and V: decompress from KV latent
+        k_c = self.w_uk(c_kv)  # [b, seq, num_heads * head_dim]
+        v = self.w_uv(c_kv)  # [b, seq, num_heads * head_dim]
+
+        k_c = k_c.view(b, seq_len, self.num_heads, self.head_dim).transpose(
+            1, 2
+        )
         v = v.view(b, seq_len, self.num_heads, self.head_dim).transpose(1, 2)
+
+        if self.rope_dim > 0:
+            # Positional Q: from query latent
+            q_r = self.w_qr(c_q)  # [b, seq, num_heads * rope_dim]
+            q_r = q_r.view(
+                b, seq_len, self.num_heads, self.rope_dim
+            ).transpose(1, 2)
+
+            # Positional K: from input directly (asymmetric!)
+            k_r = self.w_kr(x)  # [b, seq, num_heads * rope_dim]
+            k_r = k_r.view(
+                b, seq_len, self.num_heads, self.rope_dim
+            ).transpose(1, 2)
+
+            # Apply RoPE to positional vectors
+            # Reshape: [b*heads, seq, rope_dim] for RoPE
+            q_r = q_r.reshape(b * self.num_heads, seq_len, self.rope_dim)
+            k_r = k_r.reshape(b * self.num_heads, seq_len, self.rope_dim)
+            q_r, k_r = self.rope.apply_rotary_emb(q_r, k_r)
+            q_r = q_r.view(b, self.num_heads, seq_len, self.rope_dim)
+            k_r = k_r.view(b, self.num_heads, seq_len, self.rope_dim)
+
+            # Concatenate content and positional: [head_dim + rope_dim]
+            q = torch.cat([q_c, q_r], dim=-1)
+            k = torch.cat([k_c, k_r], dim=-1)
+        else:
+            q = q_c
+            k = k_c
 
         # Scaled dot-product attention with causal mask
         attn = (q @ k.transpose(-2, -1)) * self.scale
@@ -123,6 +184,7 @@ class MultiHeadLatentAttention(nn.Module):
         attn = attn + mask
         attn = torch.softmax(attn.float(), dim=-1).to(q.dtype)
 
+        # Attention applied to V (content only, no positional component)
         out = attn @ v
         out = out.transpose(1, 2).contiguous().view(b, seq_len, -1)
         return self.out_proj(out)
