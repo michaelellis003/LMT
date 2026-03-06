@@ -73,11 +73,12 @@ class CausalAttention(nn.Module):
         values = self.W_value(x)
 
         attn_scores = queries @ keys.transpose(-2, -1)
+        attn_scores = attn_scores / keys.shape[-1] ** 0.5
         attn_scores.masked_fill_(
             self.mask.bool()[:seq_length, :seq_length], -torch.inf
         )
-        attn_weights = torch.softmax(
-            attn_scores / keys.shape[-1] ** 0.5, dim=-1
+        attn_weights = torch.softmax(attn_scores.float(), dim=-1).to(
+            queries.dtype
         )
 
         return attn_weights @ values

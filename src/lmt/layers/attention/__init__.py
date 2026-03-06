@@ -15,7 +15,25 @@
 """Implementation of various attention mechanisms."""
 
 from .causal_attention import CausalAttention
+from .grouped_query_attention import GroupedQueryAttention
+from .multi_head_latent_attention import MultiHeadLatentAttention
 from .multihead_attention import MultiHeadAttention
 from .self_attention import SelfAttention
+from .sliding_window_attention import SlidingWindowAttention
 
-__all__ = ['SelfAttention', 'CausalAttention', 'MultiHeadAttention']
+ATTENTION_REGISTRY: dict[str, type] = {
+    'mha': MultiHeadAttention,
+    'gqa': GroupedQueryAttention,
+    'sliding_window': SlidingWindowAttention,
+    'mla': MultiHeadLatentAttention,
+}
+
+__all__ = [
+    'SelfAttention',
+    'CausalAttention',
+    'MultiHeadAttention',
+    'GroupedQueryAttention',
+    'SlidingWindowAttention',
+    'MultiHeadLatentAttention',
+    'ATTENTION_REGISTRY',
+]
