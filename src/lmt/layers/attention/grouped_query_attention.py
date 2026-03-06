@@ -28,6 +28,7 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 
+from lmt.layers.attention.kv_cache import KVCache
 from lmt.models.config import ModelConfig
 
 
@@ -93,8 +94,16 @@ class GroupedQueryAttention(nn.Module):
 
         self.scale = 1.0 / math.sqrt(self.head_dim)
 
+        # Optional KV cache for autoregressive generation.
+        # Set to a KVCache instance to enable caching.
+        self.kv_cache: KVCache | None = None
+
     def forward(self, x: Tensor) -> Tensor:
         """Apply grouped query attention.
+
+        When ``kv_cache`` is set, new K/V are appended to the cache
+        and the full cached K/V are used for attention. This enables
+        efficient autoregressive generation.
 
         Args:
             x: Input of shape ``[batch, seq_len, embed_dim]``.
@@ -118,14 +127,22 @@ class GroupedQueryAttention(nn.Module):
         v = v.view(b, seq_len, self.num_kv_heads, self.head_dim)
         v = v.transpose(1, 2)
 
+        # Update KV cache if active
+        if self.kv_cache is not None:
+            k, v = self.kv_cache.update(k, v)
+
         # Expand KV heads to match Q heads by repeating
         if self.num_groups > 1:
             k = k.repeat_interleave(self.num_groups, dim=1)
             v = v.repeat_interleave(self.num_groups, dim=1)
 
         # Scaled dot-product attention with causal mask
+        kv_len = k.shape[2]
         attn = (q @ k.transpose(-2, -1)) * self.scale
-        mask = self.causal_mask[:seq_len, :seq_len]
+
+        # Mask: query positions are the last seq_len of kv_len
+        q_start = kv_len - seq_len
+        mask = self.causal_mask[q_start:kv_len, :kv_len]
         attn = attn + mask
 
         # Upcast to FP32 for softmax stability
