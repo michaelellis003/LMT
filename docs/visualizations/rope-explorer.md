@@ -69,3 +69,14 @@ creating natural position-dependent attention decay.
 balance: the slowest-rotating pair completes one revolution in ~10000 positions,
 while the fastest pair rotates nearly every position. Larger bases extend
 this range (used for long-context models).
+
+## References & Further Reading
+
+- Su et al., [*RoFormer: Enhanced Transformer with Rotary Position Embedding*](https://arxiv.org/abs/2104.09864) (2021) -- the original RoPE paper
+- EleutherAI, [*Rotary Embeddings: A Relative Revolution*](https://blog.eleuther.ai/rotary-embeddings/) -- excellent intuitive explanation
+- Brenndoerfer, [*Rotary Position Embedding (RoPE)*](https://mbrenndoerfer.com/writing/rotary-position-embedding-rope-transformers) -- static visualizations of rotation and frequency patterns
+
+Our visualization is an original interactive implementation built specifically
+for LMT's educational docs. The three-panel layout (rotation circle, frequency
+spectrum, dot-product decay) with live sliders and animation is our own design,
+though the underlying concepts are well-covered in the resources above.
