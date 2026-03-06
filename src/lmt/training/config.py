@@ -50,6 +50,7 @@ class BaseTrainingConfig:
         save_dir: str = 'runs',
         task: str = 'pretraining',
         aux_loss_coeff: float = 0.0,
+        run_name: str | None = None,
         **kwargs,
     ):
         """Initializes the BaseTrainingConfig with training parameters.
@@ -70,6 +71,8 @@ class BaseTrainingConfig:
             task (str): Training task (e.g. pretraining or classification)
             aux_loss_coeff (float, optional): Coefficient for MoE auxiliary
                 load balancing loss. Defaults to 0.0 (disabled).
+            run_name (str | None, optional): Name for this experiment run.
+                Enables TensorBoard logging when set. Defaults to None.
             **kwargs (Any): Additional keyword arguments stored as attributes.
         """
         self.num_epochs = num_epochs
@@ -82,6 +85,7 @@ class BaseTrainingConfig:
         self.save_dir = save_dir
         self.task = task
         self.aux_loss_coeff = aux_loss_coeff
+        self.run_name = run_name
 
         # Store any additional config parameters
         for key, value in kwargs.items():
