@@ -120,6 +120,7 @@ class Trainer:
             self.model,
             self.device,
             self.config.task,
+            aux_loss_coeff=self.config.aux_loss_coeff,
         )
         self.examples_seen += input_batch.numel()
         self.global_step += 1
