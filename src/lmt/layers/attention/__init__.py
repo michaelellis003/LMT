@@ -18,10 +18,12 @@ from .causal_attention import CausalAttention
 from .grouped_query_attention import GroupedQueryAttention
 from .multihead_attention import MultiHeadAttention
 from .self_attention import SelfAttention
+from .sliding_window_attention import SlidingWindowAttention
 
 __all__ = [
     'SelfAttention',
     'CausalAttention',
     'MultiHeadAttention',
     'GroupedQueryAttention',
+    'SlidingWindowAttention',
 ]
