@@ -45,3 +45,8 @@ def forward(self, x: Tensor) -> Tensor:
     rms = torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + self.eps)
     return (x * rms * self.weight).to(input_dtype)  # back to original
 ```
+
+## References
+
+- Zhang & Sennrich, [*Root Mean Square Layer Normalization*](https://arxiv.org/abs/1910.07467) (2019) -- RMSNorm
+- Ba et al., [*Layer Normalization*](https://arxiv.org/abs/1607.06450) (2016) -- LayerNorm
