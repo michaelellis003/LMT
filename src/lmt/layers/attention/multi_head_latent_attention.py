@@ -34,6 +34,7 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 
+from lmt.layers.attention.kv_cache import KVCache
 from lmt.layers.positional import RoPE
 from lmt.models.config import ModelConfig
 
@@ -118,8 +119,14 @@ class MultiHeadLatentAttention(nn.Module):
             ).triu(diagonal=1),
         )
 
+        # Optional KV cache for autoregressive generation.
+        self.kv_cache: KVCache | None = None
+
     def forward(self, x: Tensor) -> Tensor:
         """Apply multi-head latent attention with decoupled RoPE.
+
+        When ``kv_cache`` is set, new K/V are appended to the cache
+        and the full cached K/V are used for attention.
 
         Args:
             x: Input ``[batch, seq_len, embed_dim]``.
@@ -128,6 +135,9 @@ class MultiHeadLatentAttention(nn.Module):
             Output with same shape.
         """
         b, seq_len, _ = x.shape
+
+        # Track position offset for RoPE when using cache
+        pos_offset = self.kv_cache.seq_len if self.kv_cache is not None else 0
 
         # Compress query
         c_q = self.w_dq(x)  # [b, seq, q_compress_dim]
@@ -163,11 +173,10 @@ class MultiHeadLatentAttention(nn.Module):
                 b, seq_len, self.num_heads, self.rope_dim
             ).transpose(1, 2)
 
-            # Apply RoPE to positional vectors
-            # Reshape: [b*heads, seq, rope_dim] for RoPE
+            # Apply RoPE with position offset for cached generation
             q_r = q_r.reshape(b * self.num_heads, seq_len, self.rope_dim)
             k_r = k_r.reshape(b * self.num_heads, seq_len, self.rope_dim)
-            q_r, k_r = self.rope.apply_rotary_emb(q_r, k_r)
+            q_r, k_r = self.rope.apply_rotary_emb(q_r, k_r, offset=pos_offset)
             q_r = q_r.view(b, self.num_heads, seq_len, self.rope_dim)
             k_r = k_r.view(b, self.num_heads, seq_len, self.rope_dim)
 
@@ -178,9 +187,15 @@ class MultiHeadLatentAttention(nn.Module):
             q = q_c
             k = k_c
 
+        # Update KV cache if active
+        if self.kv_cache is not None:
+            k, v = self.kv_cache.update(k, v)
+
         # Scaled dot-product attention with causal mask
+        kv_len = k.shape[2]
         attn = (q @ k.transpose(-2, -1)) * self.scale
-        mask = self.causal_mask[:seq_len, :seq_len]
+        q_start = kv_len - seq_len
+        mask = self.causal_mask[q_start:kv_len, :kv_len]
         attn = attn + mask
         attn = torch.softmax(attn.float(), dim=-1).to(q.dtype)
 

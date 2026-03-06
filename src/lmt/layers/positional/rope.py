@@ -74,18 +74,19 @@ class RoPE(nn.Module):
         self.cos_cache: Tensor
         self.sin_cache: Tensor
 
-    def _rotate(self, x: Tensor, seq_len: int) -> Tensor:
+    def _rotate(self, x: Tensor, seq_len: int, offset: int = 0) -> Tensor:
         """Apply rotary embedding to a single tensor.
 
         Args:
             x: Tensor of shape ``[batch, seq_len, d_model]``.
             seq_len: Actual sequence length to use.
+            offset: Starting position index (for cached generation).
 
         Returns:
             Rotated tensor with same shape.
         """
-        cos = self.cos_cache[:seq_len].unsqueeze(0)  # [1, seq, d/2]
-        sin = self.sin_cache[:seq_len].unsqueeze(0)
+        cos = self.cos_cache[offset : offset + seq_len].unsqueeze(0)
+        sin = self.sin_cache[offset : offset + seq_len].unsqueeze(0)
         x1, x2 = x.chunk(2, dim=-1)
         return torch.cat(
             [x1 * cos - x2 * sin, x2 * cos + x1 * sin],
@@ -103,7 +104,9 @@ class RoPE(nn.Module):
         """
         return self._rotate(x, x.shape[1])
 
-    def apply_rotary_emb(self, q: Tensor, k: Tensor) -> tuple[Tensor, Tensor]:
+    def apply_rotary_emb(
+        self, q: Tensor, k: Tensor, offset: int = 0
+    ) -> tuple[Tensor, Tensor]:
         """Apply rotary embeddings to query and key tensors.
 
         This is the primary interface for use inside attention.
@@ -111,9 +114,15 @@ class RoPE(nn.Module):
         Args:
             q: Query tensor ``[batch, seq_len, d_model]``.
             k: Key tensor ``[batch, seq_len, d_model]``.
+            offset: Starting position index. Use this during cached
+                generation so that new tokens get the correct
+                position (e.g., offset=5 for the 6th token).
 
         Returns:
             Tuple of (rotated_q, rotated_k) with same shapes.
         """
         seq_len = q.shape[1]
-        return self._rotate(q, seq_len), self._rotate(k, seq_len)
+        return (
+            self._rotate(q, seq_len, offset),
+            self._rotate(k, seq_len, offset),
+        )
