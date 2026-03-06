@@ -14,9 +14,9 @@
 # limitations under the License.
 """Compare training dynamics across LMT model architectures.
 
-This script trains GPT, LLaMA, Mixtral, and DeepSeek-V2 side-by-side on
-synthetic next-token prediction data and logs results to TensorBoard for
-visual comparison.
+This script trains GPT, LLaMA, Mixtral, DeepSeek-V2, and Mamba
+side-by-side on synthetic next-token prediction data and logs results
+to TensorBoard for visual comparison.
 
 Usage:
     python examples/compare_architectures.py [--epochs 5] [--device cpu]
@@ -35,6 +35,7 @@ from lmt.models.config import ModelConfig
 from lmt.models.deepseek import DeepSeekV2
 from lmt.models.gpt import GPT
 from lmt.models.llama import LLaMA
+from lmt.models.mamba import Mamba
 from lmt.models.mixtral import Mixtral
 from lmt.training.config import BaseTrainingConfig
 from lmt.training.trainer import Trainer
@@ -49,10 +50,7 @@ def make_synthetic_data(
 ) -> tuple[DataLoader, DataLoader]:
     """Create synthetic next-token prediction data.
 
-    Generates random token sequences split 80/20 into train/val loaders.
-    This isn't meaningful language -- it's purely for comparing how
-    different architectures learn to reduce loss on the same data
-    distribution.
+    Generates random token sequences split 80/20 into train/val.
 
     Args:
         vocab_size: Size of the token vocabulary.
@@ -83,14 +81,11 @@ def build_models(
 ) -> dict[str, torch.nn.Module]:
     """Build comparable versions of each architecture.
 
-    All models use the same vocab size, sequence length, embedding
-    dimension, and number of layers to make the comparison fair.
-
     Args:
         vocab_size: Vocabulary size.
         seq_len: Context length.
         embed_dim: Embedding dimension.
-        num_layers: Number of transformer blocks.
+        num_layers: Number of blocks/layers.
 
     Returns:
         Dictionary mapping model names to model instances.
@@ -126,6 +121,9 @@ def build_models(
         top_k=2,
     )
 
+    # Mamba: SSM (no attention at all!)
+    models['Mamba'] = Mamba(config, d_state=16, expand=2, d_conv=4)
+
     return models
 
 
@@ -147,13 +145,11 @@ def main() -> None:
         description='Compare LMT model architectures'
     )
     parser.add_argument(
-        '--epochs', type=int, default=5, help='Number of training epochs'
+        '--epochs', type=int, default=5, help='Number of epochs'
     )
+    parser.add_argument('--device', type=str, default='cpu', help='Device')
     parser.add_argument(
-        '--device', type=str, default='cpu', help='Device (cpu, cuda, mps)'
-    )
-    parser.add_argument(
-        '--embed-dim', type=int, default=64, help='Embedding dimension'
+        '--embed-dim', type=int, default=64, help='Embed dimension'
     )
     parser.add_argument(
         '--num-layers', type=int, default=2, help='Number of layers'
@@ -162,13 +158,13 @@ def main() -> None:
         '--seq-len', type=int, default=32, help='Sequence length'
     )
     parser.add_argument(
-        '--num-samples', type=int, default=256, help='Number of data samples'
+        '--num-samples', type=int, default=256, help='Data samples'
     )
     parser.add_argument('--batch-size', type=int, default=8, help='Batch size')
     parser.add_argument('--lr', type=float, default=1e-3, help='Learning rate')
     args = parser.parse_args()
 
-    vocab_size = 256  # Small vocab for synthetic data
+    vocab_size = 256
     save_dir = 'runs/architecture_comparison'
 
     print('=' * 60)
@@ -180,7 +176,6 @@ def main() -> None:
     print(f'Seq len: {args.seq_len}, Samples: {args.num_samples}')
     print()
 
-    # Build data loaders (same data for all models)
     train_loader, val_loader = make_synthetic_data(
         vocab_size=vocab_size,
         seq_len=args.seq_len,
@@ -188,7 +183,6 @@ def main() -> None:
         batch_size=args.batch_size,
     )
 
-    # Build all models
     models = build_models(
         vocab_size=vocab_size,
         seq_len=args.seq_len,
@@ -196,7 +190,6 @@ def main() -> None:
         num_layers=args.num_layers,
     )
 
-    # Print parameter counts
     print('Model Parameter Counts:')
     print('-' * 40)
     for name, model in models.items():
@@ -204,14 +197,12 @@ def main() -> None:
         print(f'  {name:15s} {params:>10,} params')
     print()
 
-    # Train each model
     results = {}
     for name, model in models.items():
         print(f'\n{"=" * 60}')
         print(f'Training: {name}')
         print(f'{"=" * 60}')
 
-        # Use aux_loss for MoE models
         is_moe = name in ('Mixtral', 'DeepSeek-V2')
         aux_coeff = 0.01 if is_moe else 0.0
 

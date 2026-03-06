@@ -38,6 +38,7 @@ class TestCompareArchitectures:
         assert 'LLaMA' in result.stdout
         assert 'Mixtral' in result.stdout
         assert 'DeepSeek-V2' in result.stdout
+        assert 'Mamba' in result.stdout
 
     def test_script_prints_param_counts(self) -> None:
         """Script prints parameter counts for all models."""
