@@ -14,9 +14,7 @@ class TestRMSNorm:
         assert hasattr(norm, 'weight')
         assert norm.weight.shape == (64,)
         # Weight should be initialized to ones
-        torch.testing.assert_close(
-            norm.weight.data, torch.ones(64)
-        )
+        torch.testing.assert_close(norm.weight.data, torch.ones(64))
 
     def test_custom_eps(self):
         """Test initialization with custom epsilon."""

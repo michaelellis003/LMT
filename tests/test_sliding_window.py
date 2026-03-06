@@ -59,7 +59,9 @@ class TestSlidingWindowAttention:
         positions max(0, i-1) through i.
         """
         config = self._make_config(
-            embed_dim=16, num_heads=1, window_size=2,
+            embed_dim=16,
+            num_heads=1,
+            window_size=2,
             context_length=8,
         )
         attn = SlidingWindowAttention(config)
@@ -78,8 +80,10 @@ class TestSlidingWindowAttention:
         # Position 0-3 can't see position 5 (window=2)
         for pos in range(4):
             torch.testing.assert_close(
-                out1[0, pos], out2[0, pos],
-                atol=1e-5, rtol=1e-5,
+                out1[0, pos],
+                out2[0, pos],
+                atol=1e-5,
+                rtol=1e-5,
             )
 
     def test_large_window_equals_full_attention(self):
@@ -114,7 +118,9 @@ class TestSlidingWindowAttention:
     def test_window_size_one(self):
         """With window_size=1, each token attends only to itself."""
         config = self._make_config(
-            embed_dim=16, num_heads=1, window_size=1,
+            embed_dim=16,
+            num_heads=1,
+            window_size=1,
             context_length=8,
         )
         attn = SlidingWindowAttention(config)

@@ -94,8 +94,6 @@ class TestSwiGLU:
         x = torch.randn(1, 2, d_model)
 
         # Manual: w2(silu(wg(x)) * w1(x))
-        expected = ffn.w2(
-            torch.nn.functional.silu(ffn.wg(x)) * ffn.w1(x)
-        )
+        expected = ffn.w2(torch.nn.functional.silu(ffn.wg(x)) * ffn.w1(x))
         actual = ffn(x)
         torch.testing.assert_close(actual, expected)

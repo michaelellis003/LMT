@@ -73,8 +73,7 @@ class TestLLaMA:
         configs = [
             self._make_config(num_layers=1, num_kv_heads=1),
             self._make_config(num_layers=4, num_kv_heads=8),
-            self._make_config(embed_dim=128, num_heads=4,
-                              num_kv_heads=2),
+            self._make_config(embed_dim=128, num_heads=4, num_kv_heads=2),
         ]
         for config in configs:
             model = LLaMA(config)
@@ -100,9 +99,7 @@ class TestLLaMA:
         model.eval()
 
         x = torch.randint(0, 256, (1, 8))
-        x_extended = torch.cat(
-            [x, torch.randint(0, 256, (1, 1))], dim=1
-        )
+        x_extended = torch.cat([x, torch.randint(0, 256, (1, 1))], dim=1)
 
         with torch.no_grad():
             out_short = model(x)
@@ -110,8 +107,10 @@ class TestLLaMA:
 
         # First 8 positions should match
         torch.testing.assert_close(
-            out_short, out_long[:, :8, :],
-            atol=1e-5, rtol=1e-5,
+            out_short,
+            out_long[:, :8, :],
+            atol=1e-5,
+            rtol=1e-5,
         )
 
     def test_single_token(self):

@@ -93,17 +93,17 @@ class TestMixtral:
         model.eval()
 
         x = torch.randint(0, 256, (1, 8))
-        x_ext = torch.cat(
-            [x, torch.randint(0, 256, (1, 1))], dim=1
-        )
+        x_ext = torch.cat([x, torch.randint(0, 256, (1, 1))], dim=1)
 
         with torch.no_grad():
             out_short = model(x)
             out_long = model(x_ext)
 
         torch.testing.assert_close(
-            out_short, out_long[:, :8, :],
-            atol=1e-5, rtol=1e-5,
+            out_short,
+            out_long[:, :8, :],
+            atol=1e-5,
+            rtol=1e-5,
         )
 
     def test_single_token(self):

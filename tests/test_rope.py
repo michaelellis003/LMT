@@ -117,9 +117,7 @@ class TestRoPE:
             c = cos[pos].unsqueeze(0).unsqueeze(0)  # [1, 1, d/2]
             s = sin[pos].unsqueeze(0).unsqueeze(0)
             x1, x2 = x.chunk(2, dim=-1)
-            return torch.cat(
-                [x1 * c - x2 * s, x2 * c + x1 * s], dim=-1
-            )
+            return torch.cat([x1 * c - x2 * s, x2 * c + x1 * s], dim=-1)
 
         # <R(5)q, R(3)k>
         rq5 = rotate_at_pos(q_vec, 5)
@@ -131,9 +129,7 @@ class TestRoPE:
         rk0 = rotate_at_pos(k_vec, 0)
         dot2 = (rq2 * rk0).sum()
 
-        torch.testing.assert_close(
-            dot1, dot2, atol=1e-5, rtol=1e-5
-        )
+        torch.testing.assert_close(dot1, dot2, atol=1e-5, rtol=1e-5)
 
     def test_custom_base(self):
         """Test that different base frequencies produce different caches."""

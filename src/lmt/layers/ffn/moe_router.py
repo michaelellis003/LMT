@@ -32,9 +32,7 @@ class TopKRouter(nn.Module):
         top_k: Number of experts selected per token.
     """
 
-    def __init__(
-        self, num_experts: int, d_model: int, top_k: int
-    ) -> None:
+    def __init__(self, num_experts: int, d_model: int, top_k: int) -> None:
         """Initialize TopKRouter.
 
         Args:
@@ -47,9 +45,7 @@ class TopKRouter(nn.Module):
         self.top_k = top_k
         self.gate = nn.Linear(d_model, num_experts, bias=False)
 
-    def forward(
-        self, x: Tensor
-    ) -> tuple[Tensor, Tensor, Tensor]:
+    def forward(self, x: Tensor) -> tuple[Tensor, Tensor, Tensor]:
         """Route tokens to top-k experts.
 
         Args:
@@ -69,21 +65,19 @@ class TopKRouter(nn.Module):
         probs = torch.softmax(logits.float(), dim=-1)
 
         # Select top-k experts
-        top_k_values, top_k_indices = torch.topk(
-            probs, self.top_k, dim=-1
-        )
+        top_k_values, top_k_indices = torch.topk(probs, self.top_k, dim=-1)
 
         # Renormalize gate values to sum to 1
-        gate_values = top_k_values / top_k_values.sum(
-            dim=-1, keepdim=True
-        )
+        gate_values = top_k_values / top_k_values.sum(dim=-1, keepdim=True)
 
         # Load balancing auxiliary loss
         # f_i: fraction of tokens assigned to expert i
         num_tokens = x_flat.shape[0]
         expert_mask = torch.zeros(
-            num_tokens, self.num_experts,
-            device=x.device, dtype=probs.dtype,
+            num_tokens,
+            self.num_experts,
+            device=x.device,
+            dtype=probs.dtype,
         )
         expert_mask.scatter_(1, top_k_indices, 1.0)
         f = expert_mask.mean(dim=0)  # [num_experts]

@@ -63,9 +63,7 @@ class RoPE(nn.Module):
 
         half_d = d_model // 2
         # theta_i = base^(-2i/d) for i in [0, d/2)
-        freqs = 1.0 / (
-            base ** (torch.arange(0, half_d).float() / half_d)
-        )
+        freqs = 1.0 / (base ** (torch.arange(0, half_d).float() / half_d))
         # positions: [0, 1, ..., max_seq_len-1]
         positions = torch.arange(max_seq_len).float()
         # angles: [max_seq_len, half_d]
@@ -105,9 +103,7 @@ class RoPE(nn.Module):
         """
         return self._rotate(x, x.shape[1])
 
-    def apply_rotary_emb(
-        self, q: Tensor, k: Tensor
-    ) -> tuple[Tensor, Tensor]:
+    def apply_rotary_emb(self, q: Tensor, k: Tensor) -> tuple[Tensor, Tensor]:
         """Apply rotary embeddings to query and key tensors.
 
         This is the primary interface for use inside attention.

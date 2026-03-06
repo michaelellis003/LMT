@@ -78,9 +78,7 @@ class GroupedQueryAttention(nn.Module):
         self.v_proj = nn.Linear(
             embed_dim, num_kv_heads * self.head_dim, bias=bias
         )
-        self.out_proj = nn.Linear(
-            embed_dim, embed_dim, bias=False
-        )
+        self.out_proj = nn.Linear(embed_dim, embed_dim, bias=False)
 
         self.register_buffer(
             'causal_mask',

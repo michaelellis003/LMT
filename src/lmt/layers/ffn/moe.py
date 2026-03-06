@@ -60,16 +60,10 @@ class MoEFeedForward(nn.Module):
         super().__init__()
         self.router = TopKRouter(num_experts, d_model, top_k)
         self.experts = nn.ModuleList(
-            [
-                SwiGLU(d_model, hidden_dim)
-                for _ in range(num_experts)
-            ]
+            [SwiGLU(d_model, hidden_dim) for _ in range(num_experts)]
         )
         self.shared_experts = nn.ModuleList(
-            [
-                SwiGLU(d_model, hidden_dim)
-                for _ in range(num_shared_experts)
-            ]
+            [SwiGLU(d_model, hidden_dim) for _ in range(num_shared_experts)]
         )
         self.aux_loss = torch.tensor(0.0)
 
@@ -89,9 +83,7 @@ class MoEFeedForward(nn.Module):
         b, s, d = x.shape
         x_flat = x.reshape(b * s, d)
 
-        gate_values, expert_indices, self.aux_loss = (
-            self.router(x)
-        )
+        gate_values, expert_indices, self.aux_loss = self.router(x)
 
         # Compute expert outputs for selected tokens
         output = torch.zeros_like(x_flat)
@@ -108,9 +100,7 @@ class MoEFeedForward(nn.Module):
             # Get gate weight for this expert per token
             # expert_indices[token_indices] has shape [n, top_k]
             # Find which position in top_k this expert is at
-            expert_mask = (
-                expert_indices[token_indices] == i
-            )  # [n, top_k]
+            expert_mask = expert_indices[token_indices] == i  # [n, top_k]
             weights = (gate_values[token_indices] * expert_mask).sum(
                 dim=-1, keepdim=True
             )

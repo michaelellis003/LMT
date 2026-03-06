@@ -34,9 +34,7 @@ class TestGroupedQueryAttention:
 
     def test_projection_dimensions(self):
         """Test Q projects to full dim, K/V to reduced dim."""
-        config = self._make_config(
-            embed_dim=64, num_heads=8, num_kv_heads=2
-        )
+        config = self._make_config(embed_dim=64, num_heads=8, num_kv_heads=2)
         gqa = GroupedQueryAttention(config)
         head_dim = 64 // 8  # 8
         # Q: full num_heads * head_dim = 64
@@ -108,8 +106,9 @@ class TestGroupedQueryAttention:
 
     def test_causal_masking(self):
         """Test that attention is causal (no future token leakage)."""
-        config = self._make_config(embed_dim=16, num_heads=2,
-                                   num_kv_heads=1, context_length=8)
+        config = self._make_config(
+            embed_dim=16, num_heads=2, num_kv_heads=1, context_length=8
+        )
         gqa = GroupedQueryAttention(config)
         gqa.eval()
 
@@ -125,8 +124,10 @@ class TestGroupedQueryAttention:
         # Positions 0, 1, 2 should be identical (can't see pos 3)
         for pos in range(3):
             torch.testing.assert_close(
-                out1[0, pos], out2[0, pos],
-                atol=1e-5, rtol=1e-5,
+                out1[0, pos],
+                out2[0, pos],
+                atol=1e-5,
+                rtol=1e-5,
             )
         # Position 3 should differ
         assert not torch.allclose(out1[0, 3], out2[0, 3])

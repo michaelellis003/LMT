@@ -31,9 +31,7 @@ class MixtralAttention(nn.Module):
 
     causal_mask: Tensor
 
-    def __init__(
-        self, config: ModelConfig, rope: RoPE
-    ) -> None:
+    def __init__(self, config: ModelConfig, rope: RoPE) -> None:
         """Initialize MixtralAttention.
 
         Args:
@@ -188,9 +186,7 @@ class Mixtral(nn.Module):
             top_k: Experts activated per token.
         """
         super().__init__()
-        self.tok_embed = nn.Embedding(
-            config.vocab_size, config.embed_dim
-        )
+        self.tok_embed = nn.Embedding(config.vocab_size, config.embed_dim)
 
         head_dim = config.embed_dim // config.num_heads
         rope = RoPE(
@@ -227,9 +223,7 @@ class Mixtral(nn.Module):
         std = 0.02 / math.sqrt(2 * num_layers)
         for module in self.blocks:
             block: MixtralBlock = module  # type: ignore[assignment]
-            nn.init.normal_(
-                block.attn.out_proj.weight, mean=0.0, std=std
-            )
+            nn.init.normal_(block.attn.out_proj.weight, mean=0.0, std=std)
 
     def forward(self, in_idx: Tensor) -> Tensor:
         """Forward pass of Mixtral.
