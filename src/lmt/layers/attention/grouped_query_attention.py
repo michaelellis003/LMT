@@ -22,6 +22,8 @@ inference (KV cache). By sharing them across query groups, we
 drastically reduce cache size with minimal quality loss.
 """
 
+from __future__ import annotations
+
 import math
 
 import torch
@@ -31,23 +33,45 @@ from torch import Tensor
 from lmt.layers.attention.kv_cache import KVCache
 from lmt.models.config import ModelConfig
 
+# Avoid circular import -- RoPE is only needed at runtime
+TYPE_CHECKING = False
+if TYPE_CHECKING:
+    from lmt.layers.positional import RoPE
+
 
 class GroupedQueryAttention(nn.Module):
     r"""Grouped Query Attention.
 
+    Supports optional RoPE integration and sliding window masking,
+    making it composable enough to serve as the attention layer for
+    LLaMA (GQA + RoPE), Mixtral (GQA + RoPE + sliding window), and
+    standard GPT (no RoPE, no window).
+
     Args:
         model_config: Model configuration with embed_dim, num_heads,
             num_kv_heads, context_length, and qkv_bias.
+        rope: Optional RoPE instance for rotary positional encoding.
+            When provided, RoPE is applied to Q and K inside the
+            attention computation.
+        window_size: Optional sliding window size. When set, each
+            token only attends to the previous ``window_size`` tokens.
     """
 
     causal_mask: Tensor
 
-    def __init__(self, model_config: ModelConfig) -> None:
+    def __init__(
+        self,
+        model_config: ModelConfig,
+        rope: RoPE | None = None,
+        window_size: int | None = None,
+    ) -> None:
         """Initialize Grouped Query Attention.
 
         Args:
             model_config: Model configuration. If num_kv_heads is
                 None, defaults to num_heads (standard MHA).
+            rope: Optional RoPE instance for Q/K rotation.
+            window_size: Optional sliding window size.
         """
         super().__init__()
         embed_dim = model_config.embed_dim
@@ -67,6 +91,7 @@ class GroupedQueryAttention(nn.Module):
         self.num_kv_heads = num_kv_heads
         self.head_dim = embed_dim // num_heads
         self.num_groups = num_heads // num_kv_heads
+        self.rope = rope
 
         bias = model_config.qkv_bias
 
@@ -81,16 +106,16 @@ class GroupedQueryAttention(nn.Module):
         )
         self.out_proj = nn.Linear(embed_dim, embed_dim, bias=False)
 
-        self.register_buffer(
-            'causal_mask',
-            torch.full(
-                (
-                    model_config.context_length,
-                    model_config.context_length,
-                ),
-                float('-inf'),
-            ).triu(diagonal=1),
-        )
+        # Build mask: causal with optional sliding window
+        ctx = model_config.context_length
+        if window_size is not None:
+            mask = torch.full((ctx, ctx), float('-inf'))
+            for i in range(ctx):
+                start = max(0, i - window_size + 1)
+                mask[i, start : i + 1] = 0.0
+        else:
+            mask = torch.full((ctx, ctx), float('-inf')).triu(diagonal=1)
+        self.register_buffer('causal_mask', mask)
 
         self.scale = 1.0 / math.sqrt(self.head_dim)
 
@@ -119,13 +144,26 @@ class GroupedQueryAttention(nn.Module):
 
         # Reshape: [b, seq, heads, head_dim] -> [b, heads, seq, head_dim]
         q = q.view(b, seq_len, self.num_heads, self.head_dim)
-        q = q.transpose(1, 2)
-
         k = k.view(b, seq_len, self.num_kv_heads, self.head_dim)
-        k = k.transpose(1, 2)
-
         v = v.view(b, seq_len, self.num_kv_heads, self.head_dim)
-        v = v.transpose(1, 2)
+
+        # Apply RoPE to Q and K if configured
+        if self.rope is not None:
+            # RoPE expects [batch, seq, dim], so reshape per-head
+            q = q.permute(0, 2, 1, 3).reshape(
+                b * self.num_heads, seq_len, self.head_dim
+            )
+            k = k.permute(0, 2, 1, 3).reshape(
+                b * self.num_kv_heads, seq_len, self.head_dim
+            )
+            q, k = self.rope.apply_rotary_emb(q, k)
+            q = q.view(b, self.num_heads, seq_len, self.head_dim)
+            k = k.view(b, self.num_kv_heads, seq_len, self.head_dim)
+            v = v.permute(0, 2, 1, 3)
+        else:
+            q = q.transpose(1, 2)
+            k = k.transpose(1, 2)
+            v = v.transpose(1, 2)
 
         # Update KV cache if active
         if self.kv_cache is not None:
