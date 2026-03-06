@@ -110,14 +110,18 @@ class BaseModel(nn.Module):
             if out_proj is not None and isinstance(out_proj, nn.Linear):
                 nn.init.normal_(out_proj.weight, mean=0.0, std=std)
 
-    def forward(self, in_idx: Tensor) -> Tensor:
-        """Forward pass: token indices to logits.
+    def forward_hidden(self, in_idx: Tensor) -> Tensor:
+        """Forward pass returning hidden states before the LM head.
+
+        Useful for Multi-Token Prediction and other heads that
+        need to process the backbone's representations.
 
         Args:
             in_idx: Token indices ``[batch, seq_len]``.
 
         Returns:
-            Logits tensor ``[batch, seq_len, vocab_size]``.
+            Hidden states ``[batch, seq_len, embed_dim]`` after
+            final normalization.
         """
         x = self.tok_embed(in_idx)
 
@@ -140,5 +144,15 @@ class BaseModel(nn.Module):
             for block in self.blocks:
                 x = block(x)
 
-        x = self.final_norm(x)
-        return self.out_head(x)
+        return self.final_norm(x)
+
+    def forward(self, in_idx: Tensor) -> Tensor:
+        """Forward pass: token indices to logits.
+
+        Args:
+            in_idx: Token indices ``[batch, seq_len]``.
+
+        Returns:
+            Logits tensor ``[batch, seq_len, vocab_size]``.
+        """
+        return self.out_head(self.forward_hidden(in_idx))
