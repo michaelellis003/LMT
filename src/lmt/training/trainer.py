@@ -25,6 +25,7 @@ import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
+from torch.utils.tensorboard import SummaryWriter
 
 from lmt.tokenizer.base import BaseTokenizer
 from lmt.training.config import BaseTrainingConfig
@@ -88,14 +89,23 @@ class Trainer:
         )
 
         # Training tracking
-        self.train_losses = []
-        self.val_losses = []
+        self.train_losses: list[float] = []
+        self.val_losses: list[float] = []
 
         self.examples_seen = 0
-        self.track_examples_seen = []
+        self.track_examples_seen: list[int] = []
 
         self.global_step = -1
-        self.track_global_steps = []
+        self.track_global_steps: list[int] = []
+
+        # TensorBoard logging (enabled when run_name is set)
+        self.writer: SummaryWriter | None = None
+        run_name = getattr(config, 'run_name', None)
+        if run_name:
+            log_dir = Path(config.save_dir) / 'tb_logs' / run_name
+            self.writer = SummaryWriter(log_dir=str(log_dir))
+            param_count = sum(p.numel() for p in model.parameters())
+            self.writer.add_scalar('model/param_count', param_count, 0)
 
     def train_step(
         self, input_batch: torch.Tensor, target_batch: torch.Tensor
@@ -173,11 +183,28 @@ class Trainer:
                 self.optimizer.step()
                 self.global_step += 1
 
+                # Log step-level training loss to TensorBoard
+                if self.writer is not None:
+                    self.writer.add_scalar(
+                        'loss/train_step',
+                        loss.item(),
+                        self.global_step,
+                    )
+
                 # Periodic evaluation
                 if self.global_step % self.config.eval_freq == 0:
                     train_loss, val_loss = self.evaluate_step()
                     self.train_losses.append(train_loss)
                     self.val_losses.append(val_loss)
+
+                    # Log eval losses to TensorBoard
+                    if self.writer is not None:
+                        self.writer.add_scalar(
+                            'loss/train', train_loss, self.global_step
+                        )
+                        self.writer.add_scalar(
+                            'loss/val', val_loss, self.global_step
+                        )
 
                     print(
                         f'Ep {epoch + 1} (Step {self.global_step:06d}): '
@@ -187,6 +214,11 @@ class Trainer:
 
         end_time = time.time()
         execution_time = (end_time - start_time) / 60
+
+        # Close TensorBoard writer
+        if self.writer is not None:
+            self.writer.close()
+
         print(f'Training completed in {execution_time:.2f} minutes.')
 
         return {
