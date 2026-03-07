@@ -194,6 +194,11 @@ class Trainer:
                 self.optimizer.zero_grad()
                 loss = self.train_step(input_batch, target_batch)
                 loss.backward()
+                if self.config.max_grad_norm is not None:
+                    torch.nn.utils.clip_grad_norm_(
+                        self.model.parameters(),
+                        self.config.max_grad_norm,
+                    )
                 self.optimizer.step()
 
                 # Log step-level training loss to TensorBoard
