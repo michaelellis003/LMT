@@ -5,22 +5,20 @@ Implements the decoder-only transformer from:
     Research and Technology"
     Gemma Team, 2025 -- "Gemma 3 Technical Report"
 
-Gemma 3 shares the modern LLaMA-family blueprint with:
-- **QK-Norm**: RMSNorm on Q and K per-head (added in Gemma 3)
+Gemma 3 key features:
+- **Interleaved local/global attention**: most layers use sliding
+  window (local) attention for efficiency, every Nth layer uses
+  full (global) attention for long-range dependencies
+- **QK-Norm**: RMSNorm on Q and K per-head
 - **Weight Tying**: shared input/output embedding weights
 - **RMSNorm** (pre-norm)
 - **RoPE** (rotary positional embeddings)
-- **SwiGLU** feed-forward (called GeGLU in some Gemma docs,
-  but the gating mechanism is the same)
+- **SwiGLU** feed-forward
 - **GQA** (grouped query attention)
+- **Embedding scaling** by ``sqrt(embed_dim)``
 
-Gemma also scales the embedding output by ``sqrt(embed_dim)``
-before feeding it to the blocks. This is a normalizing factor
-that stabilizes training at different model scales.
-
-Implemented as a thin wrapper around ``BaseModel`` that forces
-``qk_norm=True`` and ``tie_weights=True``, and applies the
-embedding scaling factor.
+Implemented as a BaseModel wrapper using per-layer block configs
+to achieve the interleaved attention pattern.
 """
 
 import math
@@ -37,19 +35,32 @@ from lmt.models.config import ModelConfig
 class Gemma(BaseModel):
     """Gemma decoder-only transformer model.
 
-    LLaMA-family architecture with QK-Norm, weight tying, and
-    embedding scaling by ``sqrt(embed_dim)``.
+    Uses interleaved local/global attention, QK-Norm, weight
+    tying, and embedding scaling by ``sqrt(embed_dim)``.
+
+    Args:
+        config: Model configuration.
+        local_window: Sliding window size for local attention
+            layers. Default: 512.
+        global_every: Insert a global attention layer every N
+            layers. Default: 4 (i.e., layers 3, 7, 11, ...).
     """
 
-    def __init__(self, config: ModelConfig) -> None:
+    def __init__(
+        self,
+        config: ModelConfig,
+        local_window: int = 512,
+        global_every: int = 4,
+    ) -> None:
         """Initialize Gemma model.
 
         Args:
             config: Model configuration. ``qk_norm`` and
-                ``tie_weights`` are forced True regardless of
-                the config values.
+                ``tie_weights`` are forced True.
+            local_window: Window size for local attention layers.
+            global_every: Global attention every N layers. The
+                last layer in each group of N is global.
         """
-        # Force Gemma-specific features
         config.qk_norm = True
         config.tie_weights = True
 
@@ -59,16 +70,22 @@ class Gemma(BaseModel):
             max_seq_len=config.context_length,
         )
 
-        block_config = BlockConfig(
-            attention='gqa',
-            ffn='swiglu',
-            norm='rmsnorm',
-            rope=rope,
-        )
+        # Build per-layer configs: local with window, global without
+        block_configs = []
+        for i in range(config.num_layers):
+            is_global = (i + 1) % global_every == 0
+            block_configs.append(
+                BlockConfig(
+                    attention='gqa',
+                    ffn='swiglu',
+                    norm='rmsnorm',
+                    rope=rope,
+                    window_size=None if is_global else local_window,
+                )
+            )
 
-        super().__init__(config, block_config=block_config)
+        super().__init__(config, block_config=block_configs)
 
-        # Gemma scales embeddings by sqrt(embed_dim)
         self._embed_scale = math.sqrt(config.embed_dim)
 
     def forward_hidden(self, in_idx: Tensor) -> Tensor:
