@@ -18,8 +18,7 @@ scripts/models/*
 *.pth
 
 # Data files
-data/*.csv
-data/*.tsv
+data/
 
 # Documentation build output
 site/
