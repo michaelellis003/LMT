@@ -49,6 +49,8 @@ class ModelConfig:
     ff_network: Module | None = None
     num_kv_heads: int | None = None  # None = num_heads (standard MHA)
     window_size: int | None = None  # None = full attention
+    tie_weights: bool = False  # Tie input/output embedding weights
+    qk_norm: bool = False  # Apply RMSNorm to Q and K before dot product
 
 
 class ModelConfigPresets:
