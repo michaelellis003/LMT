@@ -79,6 +79,10 @@ class BaseModel(nn.Module):
             config.embed_dim, config.vocab_size, bias=False
         )
 
+        # Tie input/output embedding weights
+        if config.tie_weights:
+            self.out_head.weight = self.tok_embed.weight
+
         # Track whether any block has MoE for aux_loss collection
         self._has_moe = block_config.ffn == 'moe'
         self.aux_loss = torch.tensor(0.0)
