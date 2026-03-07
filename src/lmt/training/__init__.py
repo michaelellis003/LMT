@@ -15,6 +15,7 @@
 
 from .config import BaseTrainingConfig
 from .curriculum import CurriculumSchedule, SequenceLengthCurriculum
+from .dpo import dpo_loss, sequence_log_probs
 from .eval import compute_perplexity
 from .trainer import Trainer
 
@@ -24,4 +25,6 @@ __all__ = [
     'SequenceLengthCurriculum',
     'Trainer',
     'compute_perplexity',
+    'dpo_loss',
+    'sequence_log_probs',
 ]
