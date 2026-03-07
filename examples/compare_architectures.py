@@ -14,15 +14,15 @@
 # limitations under the License.
 """Compare training dynamics across LMT model architectures.
 
-This script trains GPT, LLaMA, Mixtral, DeepSeek-V2, and Mamba
-side-by-side on synthetic next-token prediction data and logs results
-to TensorBoard for visual comparison.
+This script trains GPT, LLaMA, Qwen3, Gemma, Mixtral, DeepSeek-V2,
+Kimi, and Mamba side-by-side on synthetic next-token prediction data
+and logs results to MLflow for visual comparison.
 
 Usage:
     python examples/compare_architectures.py [--epochs 5] [--device cpu]
 
     # Then visualize:
-    tensorboard --logdir runs/architecture_comparison/tb_logs
+    mlflow ui --backend-store-uri file://./runs/architecture_comparison/mlruns
 """
 
 import argparse
@@ -33,10 +33,13 @@ from torch.utils.data import DataLoader, TensorDataset
 
 from lmt.models.config import ModelConfig
 from lmt.models.deepseek import DeepSeekV2
+from lmt.models.gemma import Gemma
 from lmt.models.gpt import GPT
+from lmt.models.kimi import Kimi
 from lmt.models.llama import LLaMA
 from lmt.models.mamba import Mamba
 from lmt.models.mixtral import Mixtral
+from lmt.models.qwen3 import Qwen3
 from lmt.training.config import BaseTrainingConfig
 from lmt.training.trainer import Trainer
 
@@ -108,11 +111,27 @@ def build_models(
     # LLaMA: RMSNorm + GQA + SwiGLU + RoPE
     models['LLaMA'] = LLaMA(config)
 
+    # Qwen3: LLaMA + QK-Norm + weight tying
+    models['Qwen3'] = Qwen3(config)
+
+    # Gemma: LLaMA + QK-Norm + interleaved local/global attention
+    models['Gemma'] = Gemma(config, local_window=seq_len, global_every=2)
+
     # Mixtral: LLaMA + MoE (4 experts, top-2)
     models['Mixtral'] = Mixtral(config, num_experts=4, top_k=2)
 
     # DeepSeek-V2: MLA + MoE
     models['DeepSeek-V2'] = DeepSeekV2(
+        config,
+        kv_compress_dim=embed_dim // 4,
+        q_compress_dim=embed_dim // 4,
+        rope_dim=embed_dim // 8,
+        num_experts=4,
+        top_k=2,
+    )
+
+    # Kimi: DeepSeek-V2 variant (MLA + MoE)
+    models['Kimi'] = Kimi(
         config,
         kv_compress_dim=embed_dim // 4,
         q_compress_dim=embed_dim // 4,
@@ -203,7 +222,7 @@ def main() -> None:
         print(f'Training: {name}')
         print(f'{"=" * 60}')
 
-        is_moe = name in ('Mixtral', 'DeepSeek-V2')
+        is_moe = name in ('Mixtral', 'DeepSeek-V2', 'Kimi')
         aux_coeff = 0.01 if is_moe else 0.0
 
         config = BaseTrainingConfig(
@@ -251,8 +270,8 @@ def main() -> None:
             f'{r["execution_time"]:>12.2f}'
         )
 
-    print(f'\nTensorBoard logs saved to: {save_dir}/tb_logs/')
-    print(f'Run: tensorboard --logdir {save_dir}/tb_logs')
+    print(f'\nMLflow logs saved to: {save_dir}/mlruns/')
+    print(f'Run: mlflow ui --backend-store-uri file://./{save_dir}/mlruns')
 
     return
 

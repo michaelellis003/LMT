@@ -38,6 +38,9 @@ class TestCompareArchitectures:
         assert 'LLaMA' in result.stdout
         assert 'Mixtral' in result.stdout
         assert 'DeepSeek-V2' in result.stdout
+        assert 'Qwen3' in result.stdout
+        assert 'Gemma' in result.stdout
+        assert 'Kimi' in result.stdout
         assert 'Mamba' in result.stdout
 
     def test_script_prints_param_counts(self) -> None:
