@@ -1,4 +1,4 @@
-"""Tests for new model architectures (Qwen3, Gemma)."""
+"""Tests for new model architectures (Qwen3, Gemma, Kimi)."""
 
 import torch
 
@@ -121,6 +121,49 @@ class TestGemma:
         assert issubclass(Gemma, BaseModel)
 
 
+class TestKimi:
+    """Test Kimi model architecture."""
+
+    def test_output_shape(self):
+        """Kimi produces correct output shape."""
+        from lmt.models.kimi import Kimi
+
+        config = _small_config()
+        model = Kimi(config)
+        x = torch.randint(0, 256, (2, 16))
+        logits = model(x)
+        assert logits.shape == (2, 16, 256)
+
+    def test_has_moe_aux_loss(self):
+        """Kimi has MoE aux_loss attribute."""
+        from lmt.models.kimi import Kimi
+
+        config = _small_config()
+        model = Kimi(config, num_experts=4, top_k=2)
+        x = torch.randint(0, 256, (1, 8))
+        model(x)
+        assert hasattr(model, 'aux_loss')
+        assert model.aux_loss.item() >= 0
+
+    def test_gradient_flow(self):
+        """Gradients flow through Kimi."""
+        from lmt.models.kimi import Kimi
+
+        config = _small_config()
+        model = Kimi(config)
+        x = torch.randint(0, 256, (1, 8))
+        logits = model(x)
+        logits.sum().backward()
+        assert model.tok_embed.weight.grad is not None
+
+    def test_is_deepseek_subclass(self):
+        """Kimi is a DeepSeekV2 subclass."""
+        from lmt.models.deepseek import DeepSeekV2
+        from lmt.models.kimi import Kimi
+
+        assert issubclass(Kimi, DeepSeekV2)
+
+
 class TestModelImports:
     """Test that new models are importable from top-level."""
 
@@ -131,3 +174,7 @@ class TestModelImports:
     def test_gemma_importable(self):
         """Gemma is importable from lmt."""
         from lmt import Gemma  # noqa: F401
+
+    def test_kimi_importable(self):
+        """Kimi is importable from lmt."""
+        from lmt import Kimi  # noqa: F401
