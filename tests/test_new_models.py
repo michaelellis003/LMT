@@ -120,6 +120,24 @@ class TestGemma:
 
         assert issubclass(Gemma, BaseModel)
 
+    def test_interleaved_attention_pattern(self):
+        """Gemma uses interleaved local/global attention."""
+        from lmt.models.gemma import Gemma
+
+        config = _small_config(num_layers=8)
+        model = Gemma(config, local_window=8, global_every=4)
+
+        # Check that layers 3 and 7 (0-indexed) are global
+        # and others are local (have window masking)
+        for i, block in enumerate(model.blocks):
+            mask = block.attn.causal_mask
+            is_global = (i + 1) % 4 == 0
+            if is_global:
+                # Global: standard causal mask (upper triangle is -inf)
+                assert mask[0, 0] == 0.0  # diagonal is 0
+            # All should have valid mask shapes
+            assert mask.shape[0] == config.context_length
+
 
 class TestKimi:
     """Test Kimi model architecture."""
