@@ -27,6 +27,7 @@ from torch.utils.data import DataLoader
 
 from lmt.tokenizer.base import BaseTokenizer
 from lmt.training.config import BaseTrainingConfig
+from lmt.training.curriculum import CurriculumSchedule
 from lmt.training.loss import calc_loss_batch, evaluate_model
 
 
@@ -57,6 +58,7 @@ class Trainer:
         val_loader: DataLoader,
         config: BaseTrainingConfig,
         tokenizer: BaseTokenizer | None = None,
+        curriculum: CurriculumSchedule | None = None,
     ):
         """Initializes the BaseTrainer.
 
@@ -67,12 +69,16 @@ class Trainer:
             config: A BaseTrainingConfig object containing training
                 hyperparameters.
             tokenizer: An optional BaseTokenizer instance for text processing.
+            curriculum: An optional curriculum schedule that controls
+                sequence length during training. When provided, batches
+                are truncated according to the schedule.
         """
         self.model = model
         self.train_loader = train_loader
         self.val_loader = val_loader
         self.config = config
         self.tokenizer = tokenizer
+        self.curriculum = curriculum
 
         self.device = torch.device(config.device)
         self.model.to(self.device)
@@ -177,6 +183,16 @@ class Trainer:
             self.model.train()
 
             for input_batch, target_batch in self.train_loader:
+                # Apply curriculum: truncate sequences early in training
+                if self.curriculum is not None:
+                    input_batch, target_batch = (
+                        self.curriculum.truncate_batch(
+                            input_batch,
+                            target_batch,
+                            step=self.global_step + 1,
+                        )
+                    )
+
                 self.optimizer.zero_grad()
                 loss = self.train_step(input_batch, target_batch)
                 loss.backward()
@@ -189,6 +205,14 @@ class Trainer:
                         loss.item(),
                         self.global_step,
                     )
+                    if self.curriculum is not None:
+                        self.writer.add_scalar(
+                            'curriculum/seq_length',
+                            self.curriculum.get_length(
+                                self.global_step
+                            ),
+                            self.global_step,
+                        )
 
                 # Periodic evaluation
                 if self.global_step % self.config.eval_freq == 0:
