@@ -6,12 +6,19 @@ repos:
     rev: v5.0.0
     hooks:
       - id: check-added-large-files
+        args: ['--maxkb=500']
       - id: check-case-conflict
-      - id: detect-private-key
       - id: check-merge-conflict
+      - id: check-yaml
+        args: ['--unsafe']
+      - id: check-toml
+      - id: detect-private-key
+      - id: end-of-file-fixer
       - id: trailing-whitespace
+      - id: no-commit-to-branch
+        args: ['--branch', 'main']
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.9.7
+    rev: v0.15.5
     hooks:
       - id: ruff
         args: [ --fix ]
@@ -20,6 +27,7 @@ repos:
     rev: v1.1.394
     hooks:
       - id: pyright
+        stages: [pre-push]
   - repo: local
     hooks:
       - id: check-git-author

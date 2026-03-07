@@ -94,7 +94,7 @@ split-on-trailing-comma = true
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["E501"]
 "docs/*" = ["D100"]
-"notebooks/*" = ["D101", "D102", "D104", "D107", "N803", "N806"]
+"notebooks/*" = ["D101", "D102", "D103", "D104", "D107", "E501", "N803", "N806"]
 
 [tool.ruff.format]
 quote-style = "single"
