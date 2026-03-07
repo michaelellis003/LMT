@@ -33,6 +33,9 @@ docs = [
     "mkdocs-material>=9.6",
     "mkdocstrings[python]>=0.28",
 ]
+eval = [
+    "lm-eval>=0.4.8",
+]
 
 [build-system]
 requires = ["hatchling"]
@@ -111,7 +114,7 @@ docstring-code-format = true
 docstring-code-line-length = "dynamic"
 
 [tool.pyright]
-exclude = ["tests"]
+exclude = ["tests", "src/lmt/training/lm_eval_adapter.py"]
 extraPaths = ["src"]
 venvPath = "./"
 venv = ".venv"

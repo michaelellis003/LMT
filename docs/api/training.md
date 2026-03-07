@@ -13,3 +13,9 @@
 ::: lmt.training.curriculum.CurriculumSchedule
 
 ::: lmt.training.curriculum.SequenceLengthCurriculum
+
+## Evaluation
+
+::: lmt.training.eval.compute_perplexity
+
+::: lmt.training.lm_eval_adapter.LMTEvalModel
