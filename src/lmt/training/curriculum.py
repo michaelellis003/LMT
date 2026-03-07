@@ -47,6 +47,27 @@ class CurriculumSchedule(ABC):
             The target sequence length for this step.
         """
 
+    def truncate_batch(
+        self,
+        input_batch: torch.Tensor,
+        target_batch: torch.Tensor,
+        step: int,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Truncate a batch to the curriculum length for this step.
+
+        Takes the first `get_length(step)` tokens from each sequence.
+
+        Args:
+            input_batch: Input tensor of shape [batch, seq_len].
+            target_batch: Target tensor of shape [batch, seq_len].
+            step: Current global training step.
+
+        Returns:
+            Tuple of truncated (input, target) tensors.
+        """
+        length = self.get_length(step)
+        return input_batch[:, :length], target_batch[:, :length]
+
 
 class SequenceLengthCurriculum(CurriculumSchedule):
     """Linearly increases sequence length from min to max over warmup steps.
@@ -126,24 +147,3 @@ class SequenceLengthCurriculum(CurriculumSchedule):
         # Round down to alignment, but never below min_length
         aligned = int(raw) // self.alignment * self.alignment
         return max(aligned, self.min_length)
-
-    def truncate_batch(
-        self,
-        input_batch: torch.Tensor,
-        target_batch: torch.Tensor,
-        step: int,
-    ) -> tuple[torch.Tensor, torch.Tensor]:
-        """Truncate a batch to the curriculum length for this step.
-
-        Takes the first `get_length(step)` tokens from each sequence.
-
-        Args:
-            input_batch: Input tensor of shape [batch, seq_len].
-            target_batch: Target tensor of shape [batch, seq_len].
-            step: Current global training step.
-
-        Returns:
-            Tuple of truncated (input, target) tensors.
-        """
-        length = self.get_length(step)
-        return input_batch[:, :length], target_batch[:, :length]
