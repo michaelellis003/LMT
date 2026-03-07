@@ -55,6 +55,7 @@ extra_javascript:
   - javascripts/attention-viz.js
   - javascripts/rope-viz.js
   - javascripts/pos-encoding-compare.js
+  - javascripts/tokenizer-viz.js
 
 plugins:
   - search
@@ -88,10 +89,13 @@ nav:
       - Mixtral: models/mixtral.md
       - DeepSeek-V2: models/deepseek.md
       - Mamba: models/mamba.md
+  - Experiments:
+      - Overview: experiments/index.md
   - Interactive:
       - Attention Patterns: visualizations/attention-patterns.md
       - RoPE Explorer: visualizations/rope-explorer.md
       - Positional Encoding: visualizations/positional-encoding.md
+      - Tokenizer Comparison: visualizations/tokenizer-comparison.md
   - API Reference:
       - Layers: api/layers.md
       - Models: api/models.md

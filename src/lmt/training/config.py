@@ -36,6 +36,8 @@ class BaseTrainingConfig:
         device (str): The device to use for training
             (e.g., 'cpu', 'cuda', 'mps').
         save_dir (str): The directory where training artifacts will be saved.
+        max_grad_norm (float | None): Maximum gradient norm for clipping.
+            Set to None to disable. Defaults to 1.0.
     """
 
     def __init__(
@@ -46,10 +48,11 @@ class BaseTrainingConfig:
         learning_rate: float,
         weight_decay: float,
         batch_size: int = 2,
-        device: str = 'mps',
+        device: str = 'cpu',
         save_dir: str = 'runs',
         task: str = 'pretraining',
         aux_loss_coeff: float = 0.0,
+        max_grad_norm: float | None = 1.0,
         run_name: str | None = None,
         **kwargs,
     ):
@@ -65,12 +68,14 @@ class BaseTrainingConfig:
             batch_size (int, optional): The number of samples per batch.
                 Defaults to 2.
             device (str, optional): The device to use for training.
-                Defaults to 'mps'.
+                Defaults to 'cpu'.
             save_dir (str, optional): The directory where training artifacts
                 will be saved. Defaults to 'runs'.
             task (str): Training task (e.g. pretraining or classification)
             aux_loss_coeff (float, optional): Coefficient for MoE auxiliary
                 load balancing loss. Defaults to 0.0 (disabled).
+            max_grad_norm (float | None, optional): Maximum gradient norm for
+                clipping. Set to None to disable. Defaults to 1.0.
             run_name (str | None, optional): Name for this experiment run.
                 Enables TensorBoard logging when set. Defaults to None.
             **kwargs (Any): Additional keyword arguments stored as attributes.
@@ -85,6 +90,7 @@ class BaseTrainingConfig:
         self.save_dir = save_dir
         self.task = task
         self.aux_loss_coeff = aux_loss_coeff
+        self.max_grad_norm = max_grad_norm
         self.run_name = run_name
 
         # Store any additional config parameters

@@ -14,9 +14,12 @@
 """Module for training lanuage models."""
 
 from .config import BaseTrainingConfig
+from .curriculum import CurriculumSchedule, SequenceLengthCurriculum
 from .trainer import Trainer
 
 __all__ = [
     'BaseTrainingConfig',
+    'CurriculumSchedule',
+    'SequenceLengthCurriculum',
     'Trainer',
 ]

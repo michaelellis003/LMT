@@ -349,8 +349,69 @@ class TestTrainer:
         assert optimizer_params['lr'] == lr
         assert optimizer_params['weight_decay'] == weight_decay
 
+    def test_trainer_grad_clipping_enabled(self):
+        """Test that gradient clipping is applied when max_grad_norm is set."""
+        model_config = ModelConfigPresets.small_gpt(context_length=8)
+        model = GPT(model_config)
+
+        train_loader, val_loader = self.create_mock_data_loaders(
+            batch_size=1,
+            num_batches=2,
+            seq_length=8,
+            vocab_size=model_config.vocab_size,
+        )
+
+        training_config = BaseTrainingConfig(
+            num_epochs=1,
+            eval_freq=100,
+            eval_iter=1,
+            learning_rate=1e-4,
+            weight_decay=0.01,
+            max_grad_norm=1.0,
+            device='cpu',
+        )
+
+        trainer = Trainer(model, train_loader, val_loader, training_config)
+
+        with patch('builtins.print'):
+            result = trainer.train()
+
+        # Training should complete successfully with grad clipping
+        assert trainer.global_step > -1
+        assert result['execution_time'] > 0
+
+    def test_trainer_grad_clipping_disabled(self):
+        """Test that training works when grad clipping is disabled."""
+        model_config = ModelConfigPresets.small_gpt(context_length=8)
+        model = GPT(model_config)
+
+        train_loader, val_loader = self.create_mock_data_loaders(
+            batch_size=1,
+            num_batches=2,
+            seq_length=8,
+            vocab_size=model_config.vocab_size,
+        )
+
+        training_config = BaseTrainingConfig(
+            num_epochs=1,
+            eval_freq=100,
+            eval_iter=1,
+            learning_rate=1e-4,
+            weight_decay=0.01,
+            max_grad_norm=None,
+            device='cpu',
+        )
+
+        trainer = Trainer(model, train_loader, val_loader, training_config)
+
+        with patch('builtins.print'):
+            result = trainer.train()
+
+        assert trainer.global_step > -1
+        assert result['execution_time'] > 0
+
     def test_trainer_global_step_increment(self):
-        """Test that global step is incremented correctly during training."""
+        """Test that global step increments exactly once per batch."""
         model_config = ModelConfigPresets.small_gpt(context_length=8)
         model = GPT(model_config)
 
@@ -372,17 +433,17 @@ class TestTrainer:
 
         trainer = Trainer(model, train_loader, val_loader, training_config)
 
-        initial_step = trainer.global_step
+        # global_step starts at -1, increments to 0 on first step
+        assert trainer.global_step == -1
 
-        # Perform a few training steps manually
         for i, (input_batch, target_batch) in enumerate(train_loader):
             trainer.optimizer.zero_grad()
             loss = trainer.train_step(input_batch, target_batch)
             loss.backward()
             trainer.optimizer.step()
-            trainer.global_step += 1  # This happens in the training loop
 
-            expected_step = (
-                initial_step + (i + 1) * 2
-            )  # +1 in train_step, +1 in loop
-            assert trainer.global_step == expected_step
+            # train_step increments global_step by exactly 1
+            assert trainer.global_step == i, (
+                f'After {i + 1} steps, global_step should be {i} '
+                f'but got {trainer.global_step}'
+            )

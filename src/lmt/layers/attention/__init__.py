@@ -21,6 +21,7 @@ from .kv_cache import KVCache
 from .multi_head_latent_attention import MultiHeadLatentAttention
 from .multihead_attention import MultiHeadAttention
 from .sliding_window_attention import SlidingWindowAttention
+from .ssd import SSDAttention
 
 ATTENTION_REGISTRY: dict[str, type] = {
     'mha': MultiHeadAttention,
@@ -29,6 +30,7 @@ ATTENTION_REGISTRY: dict[str, type] = {
     'mla': MultiHeadLatentAttention,
     'flash': FlashAttention,
     'gated_delta_net': GatedDeltaNet,
+    'ssd': SSDAttention,
 }
 
 __all__ = [
@@ -38,6 +40,7 @@ __all__ = [
     'GroupedQueryAttention',
     'SlidingWindowAttention',
     'MultiHeadLatentAttention',
+    'SSDAttention',
     'KVCache',
     'ATTENTION_REGISTRY',
 ]

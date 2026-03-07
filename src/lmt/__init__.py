@@ -22,14 +22,24 @@ particular their use in Large Language Models (LLM).
 
 from .models import ModelConfig
 from .models.gpt import GPT
-from .tokenizer import BaseTokenizer, BPETokenizer, NaiveTokenizer
+from .models.llama import LLaMA
+from .models.mamba import Mamba
+from .tokenizer import (
+    BaseTokenizer,
+    BPETokenizer,
+    CharTokenizer,
+    NaiveTokenizer,
+)
 from .training import Trainer
 
 __all__ = [
     'ModelConfig',
     'GPT',
+    'LLaMA',
+    'Mamba',
     'Trainer',
     'BaseTokenizer',
     'BPETokenizer',
+    'CharTokenizer',
     'NaiveTokenizer',
 ]

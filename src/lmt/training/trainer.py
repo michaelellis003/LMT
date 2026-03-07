@@ -21,14 +21,13 @@ import time
 from pathlib import Path
 from typing import Any
 
-import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
-from torch.utils.tensorboard import SummaryWriter
 
 from lmt.tokenizer.base import BaseTokenizer
 from lmt.training.config import BaseTrainingConfig
+from lmt.training.curriculum import CurriculumSchedule
 from lmt.training.loss import calc_loss_batch, evaluate_model
 
 
@@ -59,6 +58,7 @@ class Trainer:
         val_loader: DataLoader,
         config: BaseTrainingConfig,
         tokenizer: BaseTokenizer | None = None,
+        curriculum: CurriculumSchedule | None = None,
     ):
         """Initializes the BaseTrainer.
 
@@ -69,12 +69,16 @@ class Trainer:
             config: A BaseTrainingConfig object containing training
                 hyperparameters.
             tokenizer: An optional BaseTokenizer instance for text processing.
+            curriculum: An optional curriculum schedule that controls
+                sequence length during training. When provided, batches
+                are truncated according to the schedule.
         """
         self.model = model
         self.train_loader = train_loader
         self.val_loader = val_loader
         self.config = config
         self.tokenizer = tokenizer
+        self.curriculum = curriculum
 
         self.device = torch.device(config.device)
         self.model.to(self.device)
@@ -99,9 +103,11 @@ class Trainer:
         self.track_global_steps: list[int] = []
 
         # TensorBoard logging (enabled when run_name is set)
-        self.writer: SummaryWriter | None = None
+        self.writer: Any = None
         run_name = getattr(config, 'run_name', None)
         if run_name:
+            from torch.utils.tensorboard import SummaryWriter
+
             log_dir = Path(config.save_dir) / 'tb_logs' / run_name
             self.writer = SummaryWriter(log_dir=str(log_dir))
             param_count = sum(p.numel() for p in model.parameters())
@@ -177,11 +183,23 @@ class Trainer:
             self.model.train()
 
             for input_batch, target_batch in self.train_loader:
+                # Apply curriculum: truncate sequences early in training
+                if self.curriculum is not None:
+                    input_batch, target_batch = self.curriculum.truncate_batch(
+                        input_batch,
+                        target_batch,
+                        step=self.global_step + 1,
+                    )
+
                 self.optimizer.zero_grad()
                 loss = self.train_step(input_batch, target_batch)
                 loss.backward()
+                if self.config.max_grad_norm is not None:
+                    torch.nn.utils.clip_grad_norm_(
+                        self.model.parameters(),
+                        self.config.max_grad_norm,
+                    )
                 self.optimizer.step()
-                self.global_step += 1
 
                 # Log step-level training loss to TensorBoard
                 if self.writer is not None:
@@ -190,6 +208,12 @@ class Trainer:
                         loss.item(),
                         self.global_step,
                     )
+                    if self.curriculum is not None:
+                        self.writer.add_scalar(
+                            'curriculum/seq_length',
+                            self.curriculum.get_length(self.global_step),
+                            self.global_step,
+                        )
 
                 # Periodic evaluation
                 if self.global_step % self.config.eval_freq == 0:
@@ -269,6 +293,8 @@ class Trainer:
         if not x_axis_data:
             print('No data to plot. Skipping loss plot generation.')
             return
+
+        import matplotlib.pyplot as plt
 
         # Create a new figure and axes for the plot
         fig, ax = plt.subplots(figsize=(10, 6))
