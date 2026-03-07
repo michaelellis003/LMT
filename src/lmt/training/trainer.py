@@ -185,12 +185,10 @@ class Trainer:
             for input_batch, target_batch in self.train_loader:
                 # Apply curriculum: truncate sequences early in training
                 if self.curriculum is not None:
-                    input_batch, target_batch = (
-                        self.curriculum.truncate_batch(
-                            input_batch,
-                            target_batch,
-                            step=self.global_step + 1,
-                        )
+                    input_batch, target_batch = self.curriculum.truncate_batch(
+                        input_batch,
+                        target_batch,
+                        step=self.global_step + 1,
                     )
 
                 self.optimizer.zero_grad()
@@ -208,9 +206,7 @@ class Trainer:
                     if self.curriculum is not None:
                         self.writer.add_scalar(
                             'curriculum/seq_length',
-                            self.curriculum.get_length(
-                                self.global_step
-                            ),
+                            self.curriculum.get_length(self.global_step),
                             self.global_step,
                         )
 

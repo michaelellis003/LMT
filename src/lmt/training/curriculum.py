@@ -101,9 +101,7 @@ class SequenceLengthCurriculum(CurriculumSchedule):
                 f'({max_length})'
             )
         if warmup_steps <= 0:
-            raise ValueError(
-                f'warmup_steps must be > 0, got {warmup_steps}'
-            )
+            raise ValueError(f'warmup_steps must be > 0, got {warmup_steps}')
 
         self.min_length = min_length
         self.max_length = max_length

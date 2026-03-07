@@ -168,8 +168,12 @@ class TestCurriculumTrainerIntegration:
         """Create a minimal model and data for integration tests."""
         torch.manual_seed(42)
         config = ModelConfig(
-            vocab_size=50, embed_dim=32, num_heads=2,
-            num_layers=1, context_length=16, dropout=0.0,
+            vocab_size=50,
+            embed_dim=32,
+            num_heads=2,
+            num_layers=1,
+            context_length=16,
+            dropout=0.0,
         )
         model = GPT(config)
 
@@ -181,8 +185,11 @@ class TestCurriculumTrainerIntegration:
         loader = DataLoader(ds, batch_size=4)
 
         train_config = BaseTrainingConfig(
-            num_epochs=1, eval_freq=5, eval_iter=2,
-            learning_rate=1e-3, weight_decay=0.0,
+            num_epochs=1,
+            eval_freq=5,
+            eval_iter=2,
+            learning_rate=1e-3,
+            weight_decay=0.0,
             device='cpu',
         )
         return model, loader, train_config
@@ -194,7 +201,10 @@ class TestCurriculumTrainerIntegration:
             min_length=4, max_length=16, warmup_steps=10
         )
         trainer = Trainer(
-            model, loader, loader, train_config,
+            model,
+            loader,
+            loader,
+            train_config,
             curriculum=curriculum,
         )
         assert trainer.curriculum is curriculum
@@ -214,7 +224,10 @@ class TestCurriculumTrainerIntegration:
             min_length=4, max_length=16, warmup_steps=10
         )
         trainer = Trainer(
-            model, loader, loader, train_config,
+            model,
+            loader,
+            loader,
+            train_config,
             curriculum=curriculum,
         )
         result = trainer.train()
