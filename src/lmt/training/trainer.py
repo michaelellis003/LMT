@@ -59,6 +59,7 @@ class Trainer:
         config: BaseTrainingConfig,
         tokenizer: BaseTokenizer | None = None,
         curriculum: CurriculumSchedule | None = None,
+        scheduler: torch.optim.lr_scheduler.LRScheduler | None = None,
     ):
         """Initializes the BaseTrainer.
 
@@ -72,6 +73,9 @@ class Trainer:
             curriculum: An optional curriculum schedule that controls
                 sequence length during training. When provided, batches
                 are truncated according to the schedule.
+            scheduler: An optional PyTorch LR scheduler. When provided,
+                ``scheduler.step()`` is called after each optimizer step.
+                Use any ``torch.optim.lr_scheduler`` class.
         """
         self.model = model
         self.train_loader = train_loader
@@ -79,6 +83,7 @@ class Trainer:
         self.config = config
         self.tokenizer = tokenizer
         self.curriculum = curriculum
+        self.scheduler = scheduler
 
         self.device = torch.device(config.device)
         self.model.to(self.device)
@@ -200,6 +205,8 @@ class Trainer:
                         self.config.max_grad_norm,
                     )
                 self.optimizer.step()
+                if self.scheduler is not None:
+                    self.scheduler.step()
 
                 # Log step-level training loss to TensorBoard
                 if self.writer is not None:
@@ -212,6 +219,12 @@ class Trainer:
                         self.writer.add_scalar(
                             'curriculum/seq_length',
                             self.curriculum.get_length(self.global_step),
+                            self.global_step,
+                        )
+                    if self.scheduler is not None:
+                        self.writer.add_scalar(
+                            'lr',
+                            self.optimizer.param_groups[0]['lr'],
                             self.global_step,
                         )
 
