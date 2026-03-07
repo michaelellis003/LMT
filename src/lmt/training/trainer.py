@@ -21,11 +21,9 @@ import time
 from pathlib import Path
 from typing import Any
 
-import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
-from torch.utils.tensorboard import SummaryWriter
 
 from lmt.tokenizer.base import BaseTokenizer
 from lmt.training.config import BaseTrainingConfig
@@ -99,9 +97,11 @@ class Trainer:
         self.track_global_steps: list[int] = []
 
         # TensorBoard logging (enabled when run_name is set)
-        self.writer: SummaryWriter | None = None
+        self.writer: Any = None
         run_name = getattr(config, 'run_name', None)
         if run_name:
+            from torch.utils.tensorboard import SummaryWriter
+
             log_dir = Path(config.save_dir) / 'tb_logs' / run_name
             self.writer = SummaryWriter(log_dir=str(log_dir))
             param_count = sum(p.numel() for p in model.parameters())
@@ -268,6 +268,8 @@ class Trainer:
         if not x_axis_data:
             print('No data to plot. Skipping loss plot generation.')
             return
+
+        import matplotlib.pyplot as plt
 
         # Create a new figure and axes for the plot
         fig, ax = plt.subplots(figsize=(10, 6))
