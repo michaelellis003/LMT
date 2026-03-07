@@ -1,4 +1,4 @@
-"""Tests for TensorBoard experiment tracking integration."""
+"""Tests for MLflow experiment tracking integration."""
 
 import tempfile
 from pathlib import Path
@@ -21,11 +21,38 @@ def _make_loader(
     return DataLoader(TensorDataset(inputs, targets), batch_size=batch)
 
 
-class TestTensorBoardLogging:
-    """Test TensorBoard integration in Trainer."""
+class TestMLflowConfig:
+    """Test MLflow configuration in BaseTrainingConfig."""
 
-    def test_tensorboard_creates_log_dir(self) -> None:
-        """Trainer creates TensorBoard log directory."""
+    def test_config_has_run_name(self) -> None:
+        """run_name field exists for naming MLflow runs."""
+        config = BaseTrainingConfig(
+            num_epochs=1,
+            eval_freq=10,
+            eval_iter=1,
+            learning_rate=1e-3,
+            weight_decay=0.0,
+            run_name='my-run',
+        )
+        assert config.run_name == 'my-run'
+
+    def test_run_name_defaults_to_none(self) -> None:
+        """run_name defaults to None (MLflow disabled)."""
+        config = BaseTrainingConfig(
+            num_epochs=1,
+            eval_freq=10,
+            eval_iter=1,
+            learning_rate=1e-3,
+            weight_decay=0.0,
+        )
+        assert config.run_name is None
+
+
+class TestMLflowLogging:
+    """Test MLflow integration in Trainer."""
+
+    def test_mlflow_creates_run_dir(self) -> None:
+        """Trainer creates MLflow run artifacts when run_name is set."""
         model = GPT(ModelConfigPresets.small_gpt(context_length=16))
         loader = _make_loader(vocab_size=model.tok_embed.num_embeddings)
 
@@ -43,16 +70,12 @@ class TestTensorBoardLogging:
             trainer = Trainer(model, loader, loader, config)
             trainer.train()
 
-            # TensorBoard log directory should exist
-            tb_dir = Path(tmp) / 'tb_logs' / 'test_run'
-            assert tb_dir.exists(), f'TensorBoard dir {tb_dir} should exist'
+            # MLflow creates an mlruns directory
+            mlruns_dir = Path(tmp) / 'mlruns'
+            assert mlruns_dir.exists(), f'MLflow dir {mlruns_dir} should exist'
 
-            # Should contain event files
-            event_files = list(tb_dir.glob('events.out.tfevents.*'))
-            assert len(event_files) > 0, 'Should have event files'
-
-    def test_tensorboard_disabled_by_default(self) -> None:
-        """TensorBoard is disabled when no run_name is set."""
+    def test_mlflow_disabled_by_default(self) -> None:
+        """MLflow is disabled when no run_name is set."""
         model = GPT(ModelConfigPresets.small_gpt(context_length=16))
         loader = _make_loader(vocab_size=model.tok_embed.num_embeddings)
 
@@ -69,12 +92,15 @@ class TestTensorBoardLogging:
             trainer = Trainer(model, loader, loader, config)
             trainer.train()
 
-            # No tb_logs directory should be created
-            tb_dir = Path(tmp) / 'tb_logs'
-            assert not tb_dir.exists(), 'No TB dir when run_name not set'
+            mlruns_dir = Path(tmp) / 'mlruns'
+            assert not mlruns_dir.exists(), (
+                'No mlruns dir when run_name not set'
+            )
 
-    def test_tensorboard_logs_scalars(self) -> None:
-        """TensorBoard logs contain loss scalars."""
+    def test_mlflow_logs_metrics(self) -> None:
+        """MLflow run contains logged metrics."""
+        import mlflow
+
         model = GPT(ModelConfigPresets.small_gpt(context_length=16))
         loader = _make_loader(vocab_size=model.tok_embed.num_embeddings)
 
@@ -87,19 +113,63 @@ class TestTensorBoardLogging:
                 weight_decay=0.0,
                 device='cpu',
                 save_dir=tmp,
-                run_name='scalar_test',
+                run_name='metric_test',
             )
             trainer = Trainer(model, loader, loader, config)
             trainer.train()
 
-            # Event files should have nonzero size (contain data)
-            tb_dir = Path(tmp) / 'tb_logs' / 'scalar_test'
-            event_files = list(tb_dir.glob('events.out.tfevents.*'))
-            total_size = sum(f.stat().st_size for f in event_files)
-            assert total_size > 100, 'Event files should contain logged data'
+            # Query MLflow for the run
+            tracking_uri = f'file://{Path(tmp).resolve()}/mlruns'
+            client = mlflow.tracking.MlflowClient(tracking_uri)
+            experiments = client.search_experiments()
+            assert len(experiments) > 0
 
-    def test_tensorboard_with_moe_model(self) -> None:
-        """TensorBoard works with MoE models that have aux_loss."""
+            runs = client.search_runs(
+                experiment_ids=[experiments[0].experiment_id]
+            )
+            assert len(runs) == 1
+            run = runs[0]
+
+            # Check that metrics were logged
+            assert 'train_step_loss' in run.data.metrics
+            assert 'train_loss' in run.data.metrics
+            assert 'val_loss' in run.data.metrics
+
+    def test_mlflow_logs_params(self) -> None:
+        """MLflow run contains training config as params."""
+        import mlflow
+
+        model = GPT(ModelConfigPresets.small_gpt(context_length=16))
+        loader = _make_loader(vocab_size=model.tok_embed.num_embeddings)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            config = BaseTrainingConfig(
+                num_epochs=1,
+                eval_freq=1,
+                eval_iter=1,
+                learning_rate=1e-3,
+                weight_decay=0.0,
+                device='cpu',
+                save_dir=tmp,
+                run_name='param_test',
+            )
+            trainer = Trainer(model, loader, loader, config)
+            trainer.train()
+
+            tracking_uri = f'file://{Path(tmp).resolve()}/mlruns'
+            client = mlflow.tracking.MlflowClient(tracking_uri)
+            experiments = client.search_experiments()
+            runs = client.search_runs(
+                experiment_ids=[experiments[0].experiment_id]
+            )
+            run = runs[0]
+
+            assert run.data.params['learning_rate'] == '0.001'
+            assert run.data.params['num_epochs'] == '1'
+            assert 'param_count' in run.data.params
+
+    def test_mlflow_with_moe_model(self) -> None:
+        """MLflow works with MoE models that have aux_loss."""
         from lmt.models.mixtral import Mixtral
 
         config = ModelConfig(
@@ -129,10 +199,10 @@ class TestTensorBoardLogging:
             trainer = Trainer(model, loader, loader, train_config)
             trainer.train()
 
-            tb_dir = Path(tmp) / 'tb_logs' / 'moe_test'
-            assert tb_dir.exists()
+            mlruns_dir = Path(tmp) / 'mlruns'
+            assert mlruns_dir.exists()
 
-    def test_existing_behavior_unchanged(self) -> None:
+    def test_return_dict_unchanged(self) -> None:
         """Trainer still returns the same results dict."""
         model = GPT(ModelConfigPresets.small_gpt(context_length=16))
         loader = _make_loader(vocab_size=model.tok_embed.num_embeddings)
@@ -151,7 +221,6 @@ class TestTensorBoardLogging:
             trainer = Trainer(model, loader, loader, config)
             result = trainer.train()
 
-            # Original return values still present
             assert 'train_losses' in result
             assert 'val_losses' in result
             assert 'execution_time' in result
