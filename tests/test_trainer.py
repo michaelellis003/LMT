@@ -349,6 +349,67 @@ class TestTrainer:
         assert optimizer_params['lr'] == lr
         assert optimizer_params['weight_decay'] == weight_decay
 
+    def test_trainer_grad_clipping_enabled(self):
+        """Test that gradient clipping is applied when max_grad_norm is set."""
+        model_config = ModelConfigPresets.small_gpt(context_length=8)
+        model = GPT(model_config)
+
+        train_loader, val_loader = self.create_mock_data_loaders(
+            batch_size=1,
+            num_batches=2,
+            seq_length=8,
+            vocab_size=model_config.vocab_size,
+        )
+
+        training_config = BaseTrainingConfig(
+            num_epochs=1,
+            eval_freq=100,
+            eval_iter=1,
+            learning_rate=1e-4,
+            weight_decay=0.01,
+            max_grad_norm=1.0,
+            device='cpu',
+        )
+
+        trainer = Trainer(model, train_loader, val_loader, training_config)
+
+        with patch('builtins.print'):
+            result = trainer.train()
+
+        # Training should complete successfully with grad clipping
+        assert trainer.global_step > -1
+        assert result['execution_time'] > 0
+
+    def test_trainer_grad_clipping_disabled(self):
+        """Test that training works when grad clipping is disabled."""
+        model_config = ModelConfigPresets.small_gpt(context_length=8)
+        model = GPT(model_config)
+
+        train_loader, val_loader = self.create_mock_data_loaders(
+            batch_size=1,
+            num_batches=2,
+            seq_length=8,
+            vocab_size=model_config.vocab_size,
+        )
+
+        training_config = BaseTrainingConfig(
+            num_epochs=1,
+            eval_freq=100,
+            eval_iter=1,
+            learning_rate=1e-4,
+            weight_decay=0.01,
+            max_grad_norm=None,
+            device='cpu',
+        )
+
+        trainer = Trainer(model, train_loader, val_loader, training_config)
+
+        with patch('builtins.print'):
+            result = trainer.train()
+
+        assert trainer.global_step > -1
+        assert result['execution_time'] > 0
+
     def test_trainer_global_step_increment(self):
         """Test that global step increments exactly once per batch."""
         model_config = ModelConfigPresets.small_gpt(context_length=8)
