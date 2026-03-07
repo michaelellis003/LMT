@@ -114,9 +114,12 @@ def generate_and_print_sample(
     based on a starting context, prints the result to the console, and then
     restores the model to training mode.
 
+    Works with any model that has a ``config.context_length`` attribute
+    (BaseModel, GPT, LLaMA, Mamba, etc.) or a ``pos_embed`` attribute
+    (legacy GPT-style).
+
     Args:
         model (nn.Module): The transformer model to use for generation.
-            It's assumed to have a `pos_embed` attribute.
         tokenizer (Any): The tokenizer used for encoding the start context
             and decoding the generated token IDs. The specific type can vary.
         device (torch.device): The device (e.g., 'cuda' or 'cpu') on which
@@ -124,7 +127,11 @@ def generate_and_print_sample(
         start_context (str): The initial string to prompt the model.
     """
     model.eval()
-    context_size = model.pos_embed.weight.shape[0]  # type: ignore
+    config = getattr(model, 'config', None)
+    if config is not None and hasattr(config, 'context_length'):
+        context_size = config.context_length
+    else:
+        context_size = model.pos_embed.weight.shape[0]  # type: ignore
 
     encoded = tokenizer.encode(start_context)
     encoded = torch.tensor(encoded).unsqueeze(0).to(device)
