@@ -55,6 +55,7 @@ extra_javascript:
   - javascripts/attention-viz.js
   - javascripts/rope-viz.js
   - javascripts/pos-encoding-compare.js
+  - javascripts/tokenizer-viz.js
 
 plugins:
   - search
@@ -94,6 +95,7 @@ nav:
       - Attention Patterns: visualizations/attention-patterns.md
       - RoPE Explorer: visualizations/rope-explorer.md
       - Positional Encoding: visualizations/positional-encoding.md
+      - Tokenizer Comparison: visualizations/tokenizer-comparison.md
   - API Reference:
       - Layers: api/layers.md
       - Models: api/models.md
