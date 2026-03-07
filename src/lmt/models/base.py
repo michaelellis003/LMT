@@ -14,6 +14,7 @@ import math
 import torch
 import torch.nn as nn
 from torch import Tensor
+from torch.utils.checkpoint import checkpoint as grad_checkpoint
 
 from lmt.layers.blocks.configurable_block import BlockConfig, ConfigurableBlock
 from lmt.layers.ffn.moe import MoEFeedForward
@@ -87,6 +88,9 @@ class BaseModel(nn.Module):
         self._has_moe = block_config.ffn == 'moe'
         self.aux_loss = torch.tensor(0.0)
 
+        # Gradient checkpointing: trade compute for memory
+        self.gradient_checkpointing = False
+
         self._init_weights()
 
     def _init_weights(self) -> None:
@@ -144,6 +148,9 @@ class BaseModel(nn.Module):
                 if isinstance(cfg_block.ffn, MoEFeedForward):
                     total_aux = total_aux + cfg_block.ffn.aux_loss
             self.aux_loss = total_aux
+        elif self.gradient_checkpointing and self.training:
+            for block in self.blocks:
+                x = grad_checkpoint(block, x, use_reentrant=False)
         else:
             for block in self.blocks:
                 x = block(x)
