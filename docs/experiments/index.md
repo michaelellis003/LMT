@@ -132,6 +132,34 @@ chunkwise algorithms) and long sequences (n >> d).
 **Lesson**: Algorithmic complexity ≠ wall-clock time. Implementation
 efficiency matters as much as theoretical complexity.
 
+## 6. Scaling Up: TinyStories with BPE
+
+Our first real-scale experiment: training a 30.5M parameter GPT model on
+the TinyStories dataset using GPT-2 BPE tokenization (50,257 vocab).
+
+| Epoch | Train Loss | % Below Random |
+|-------|-----------|----------------|
+| 1     | 5.14      | 52.5%          |
+| 2     | 3.60      | 66.8%          |
+| 3     | 3.22      | 70.2%          |
+| 4     | 2.99      | 72.4%          |
+| 5     | 2.83      | 73.9%          |
+
+Random baseline: $\ln(50257) \approx 10.83$. Final loss of 2.83 = perplexity ~17.
+
+**Config**: 256 embed_dim, 8 heads, 6 layers, context length 256, batch
+size 32, lr 3e-4, trained on Apple M3 Pro GPU (MPS).
+
+**Key insight**: BPE tokenization makes a **huge** difference compared to
+character-level. Each BPE token carries ~3-4 characters of semantic content,
+so the model sees more meaning per position. The loss was still decreasing
+at epoch 5 -- more training would likely push it lower.
+
+```bash
+python examples/train_tinystories.py --embed-dim 256 --num-layers 6 \
+    --num-heads 8 --epochs 5 --device mps --use-valid-only
+```
+
 ## Running the Experiments
 
 Clone the repo and run the notebook:
@@ -143,9 +171,15 @@ pip install uv && uv sync
 jupyter notebook notebooks/experiments.ipynb
 ```
 
-Or run the training recipe directly:
+Or run the training recipes directly:
 
 ```bash
+# Quick character-level experiment (~2 min)
 python examples/train_shakespeare.py --epochs 10 --device cpu
+
+# Compare attention variants (MHA, GQA, GDN, SSD)
 python examples/compare_attention.py --epochs 10 --device cpu
+
+# Real-scale BPE training on TinyStories
+python examples/train_tinystories.py --epochs 5 --device cpu --use-valid-only
 ```
