@@ -55,7 +55,9 @@ def compute_group_advantages(
         return torch.zeros_like(rewards)
 
     mean = rewards.mean()
-    std = rewards.std()
+    # Population std (correction=0), not sample std (Bessel's).
+    # We're normalizing a fixed group, not estimating population variance.
+    std = rewards.std(correction=0)
 
     if std < eps:
         return torch.zeros_like(rewards)
