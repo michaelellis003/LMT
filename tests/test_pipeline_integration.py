@@ -201,6 +201,47 @@ class TestReproducibilityPipeline:
         assert result1.final_loss == result2.final_loss
 
 
+class TestTokenDatasetPipeline:
+    """Test: TokenDataset → DataLoader → training."""
+
+    def test_packed_data_training(self, tmp_path: Path):
+        """Pack documents → TokenDataset → train model."""
+        from lmt.data.token_dataset import TokenDataset, pack_documents
+        from lmt.eval.bpb import compute_bpb
+        from lmt.models.qwen3.qwen3 import Qwen3
+        from lmt.research.experiment import (
+            ExperimentRunConfig,
+            ExperimentRunner,
+        )
+
+        config = _tiny_config()
+        model = Qwen3(config)
+
+        # Simulate tokenized documents
+        docs = [torch.randint(0, 64, (50,)) for _ in range(10)]
+        packed = pack_documents(docs, sep_token_id=0)
+        dataset = TokenDataset(packed, context_length=16)
+
+        assert len(dataset) > 0
+
+        # Train using ExperimentRunner
+        train_data = torch.stack([dataset[i] for i in range(len(dataset))])
+        exp_config = ExperimentRunConfig(
+            name='packed_test',
+            train_steps=10,
+            eval_interval=5,
+            lr=5e-3,
+        )
+        runner = ExperimentRunner(output_dir=str(tmp_path))
+        result = runner.run(model, train_data, exp_config)
+
+        assert result.final_loss is not None
+
+        # BPB should be computable on the same data
+        bpb = compute_bpb(model, train_data[:4], bytes_per_token=1.0)
+        assert bpb > 0
+
+
 class TestRewardIntegration:
     """Test: reward functions work with data pipeline."""
 
