@@ -26,3 +26,9 @@ site/
 # Environment files
 .env
 .env.*
+
+# MLflow runs
+runs/
+
+# Claude Code
+.claude/
