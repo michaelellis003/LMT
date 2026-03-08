@@ -53,8 +53,12 @@ notation that maps directly to the papers.
 |-------|---------------|
 | GPT | Multi-head attention + learned positional embeddings |
 | LLaMA | RMSNorm + RoPE + SwiGLU + GQA |
-| Mixtral | LLaMA + MoE FFN + sliding window attention |
 | Mamba | Selective State Space Model (no attention) |
+| Mixtral | LLaMA + MoE FFN + sliding window attention |
+| DeepSeek-V2 | MLA + MoE + decoupled RoPE |
+| Qwen3 | LLaMA-style + QK-Norm + weight tying |
+| Gemma | Interleaved local/global attention |
+| Kimi | DeepSeek-style MLA + MoE |
 | Configurable | Mix any attention + FFN + norm via `BlockConfig` |
 
 ### Tokenizers
@@ -105,5 +109,5 @@ Learn by experimenting, not just reading:
 
 1. **Readability first** -- code should read like a textbook
 2. **Math in docstrings** -- LaTeX formulas that match the papers
-3. **Test-driven** -- every component has a comprehensive test suite (~400 tests)
+3. **Test-driven** -- every component has a comprehensive test suite (500+ tests)
 4. **Composable** -- mix and match layers to build new architectures

@@ -52,6 +52,7 @@ def compute_perplexity(
     Returns:
         The perplexity as a float.
     """
+    was_training = model.training
     model.eval()
     device_obj = torch.device(device)
     model.to(device_obj)
@@ -96,4 +97,9 @@ def compute_perplexity(
                 total_tokens += tgt[score_start:].numel()
 
     ppl = torch.exp(torch.tensor(total_nll / total_tokens)).item()
+
+    # Restore original training mode
+    if was_training:
+        model.train()
+
     return ppl

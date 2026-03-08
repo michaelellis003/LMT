@@ -57,4 +57,4 @@ model = Kimi(
 
 ## References
 
-- Kimi Team, Moonshot AI, [*Kimi K2*](https://arxiv.org/abs/2507.14830) (2025)
+- Kimi Team, Moonshot AI, [*Kimi K2: Open Agentic Intelligence*](https://arxiv.org/abs/2507.20534) (2025)

@@ -16,6 +16,14 @@ The load balancing auxiliary loss encourages even expert usage:
 where :math:`f_i` is the fraction of tokens routed to expert
 :math:`i` and :math:`P_i` is the mean routing probability for
 expert :math:`i`.
+
+References:
+    Shazeer et al., 2017 -- "Outrageously Large Neural Networks:
+    The Sparsely-Gated Mixture-of-Experts Layer"
+    https://arxiv.org/abs/1701.06538
+    Fedus et al., 2022 -- "Switch Transformers: Scaling to Trillion
+    Parameter Models with Simple and Efficient Sparsity"
+    https://arxiv.org/abs/2101.03961
 """
 
 import torch

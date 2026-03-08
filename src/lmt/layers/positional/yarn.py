@@ -109,9 +109,8 @@ class YaRNRoPE(RoPE):
         # Interpolation factor per dimension:
         # gamma=0 (high freq, short wavelength) -> keep original freq
         # gamma=1 (low freq, long wavelength) -> divide freq by scale
-        # This is inverted from the paper's convention — we blend the
-        # *inverse* factor: freq_new = freq_old / lerp(1, scale, gamma)
-        interp_factor = 1.0 / ((1 - gamma) + gamma / scale)
+        # freq_new = freq_old / lerp(1, scale, gamma)
+        interp_factor = 1.0 / ((1 - gamma) + gamma * scale)
         adjusted_freqs = freqs * interp_factor
 
         # Attention temperature (Eq. 20 in YaRN paper)

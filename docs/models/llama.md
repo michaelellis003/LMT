@@ -7,7 +7,7 @@ modern improvements over GPT into a cleaner, more efficient design.
 
 | Aspect | GPT | LLaMA |
 |--------|-----|-------|
-| Normalization | Post-norm LayerNorm | **Pre-norm RMSNorm** |
+| Normalization | Pre-norm LayerNorm | **Pre-norm RMSNorm** |
 | Position encoding | Learned absolute | **RoPE** (relative) |
 | FFN activation | GELU | **SwiGLU** |
 | Attention | Standard MHA | **Grouped Query Attention** |

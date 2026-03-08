@@ -12,7 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Implementation of Multi-Head Attention Layer."""
+"""Multi-Head Attention Layer.
+
+Implements scaled dot-product multi-head attention from:
+    Vaswani et al., 2017 -- "Attention Is All You Need"
+    https://arxiv.org/abs/1706.03762
+"""
 
 import math
 

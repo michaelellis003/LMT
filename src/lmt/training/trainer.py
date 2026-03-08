@@ -61,7 +61,7 @@ class Trainer:
         curriculum: CurriculumSchedule | None = None,
         scheduler: torch.optim.lr_scheduler.LRScheduler | None = None,
     ):
-        """Initializes the BaseTrainer.
+        """Initializes the Trainer.
 
         Args:
             model: The PyTorch model (nn.Module) to be trained.
@@ -161,7 +161,7 @@ class Trainer:
             self.config.task,
             aux_loss_coeff=self.config.aux_loss_coeff,
         )
-        self.examples_seen += input_batch.numel()
+        self.examples_seen += input_batch.shape[0]
         self.global_step += 1
         return loss
 
@@ -202,6 +202,23 @@ class Trainer:
         print('Starting model training...')
         start_time = time.time()
 
+        try:
+            return self._run_training_loop(start_time)
+        except BaseException:
+            if self._mlflow_active:
+                self._mlflow.end_run(status='FAILED')
+                self._mlflow_active = False
+            raise
+
+    def _run_training_loop(self, start_time: float) -> dict[str, Any]:
+        """Execute the training loop.
+
+        Args:
+            start_time: Training start time from ``time.time()``.
+
+        Returns:
+            Dictionary with losses and execution metadata.
+        """
         for epoch in range(self.config.num_epochs):
             self.model.train()
 

@@ -10,7 +10,7 @@ An educational PyTorch library for understanding how modern transformer architec
 
 ## Features
 
-**Attention Mechanisms**
+**Attention & Sequence Mixing**
 
 | Component | Description | Paper |
 |-----------|-------------|-------|
@@ -18,6 +18,9 @@ An educational PyTorch library for understanding how modern transformer architec
 | Grouped Query Attention | Shared KV heads for efficiency | Ainslie et al., 2023 |
 | Sliding Window Attention | Local attention with fixed window | Beltagy et al., 2020 |
 | Multi-Head Latent Attention | KV compression + decoupled RoPE | DeepSeek-AI, 2024 |
+| Flash Attention | Tiled attention with online softmax (educational) | Dao et al., 2022 |
+| Gated Delta Networks | Linear attention with delta rule | Yang et al., 2024 |
+| SSD | Structured State Space Duality (Mamba-2) | Dao & Gu, 2024 |
 
 **Feed-Forward Networks**
 
@@ -26,7 +29,7 @@ An educational PyTorch library for understanding how modern transformer architec
 | SwiGLU | Gated FFN with Swish activation (LLaMA, Mixtral) |
 | Mixture of Experts | Top-k sparse routing with load balancing loss |
 
-**Other Components**: RMSNorm, Rotary Position Embedding (RoPE)
+**Other Components**: RMSNorm, RoPE, YaRN, ALiBi, KV Cache, Multi-Token Prediction, Mixture of Depths
 
 **Model Architectures**
 
@@ -34,7 +37,12 @@ An educational PyTorch library for understanding how modern transformer architec
 |-------|---------------|
 | GPT | Multi-head attention + GELU FFN + learned position embeddings |
 | LLaMA | RMSNorm + RoPE + SwiGLU + GQA |
+| Mamba | Selective State Space Model (no attention) |
 | Mixtral | LLaMA + MoE FFN + sliding window attention |
+| DeepSeek-V2 | MLA + MoE + decoupled RoPE |
+| Qwen3 | LLaMA-style + QK-Norm + weight tying |
+| Gemma | Interleaved local/global attention |
+| Kimi | DeepSeek-style MLA + MoE |
 
 ## Installation
 
@@ -110,22 +118,30 @@ aux_loss = model.aux_loss  # load balancing loss for training
 ```
 src/lmt/
   layers/
-    attention/     # MHA, GQA, Sliding Window, MLA
+    attention/     # MHA, GQA, SWA, MLA, Flash, GDN, SSD, KV Cache
     ffn/           # SwiGLU, MoE (Router + Experts)
     normalization/ # RMSNorm
-    positional/    # RoPE
+    positional/    # RoPE, YaRN, ALiBi
+    ssm/           # Selective SSM, Mamba Block
+    blocks/        # ConfigurableBlock, Mixture of Depths
   models/
-    gpt/           # GPT (original decoder-only transformer)
+    gpt/           # GPT (decoder-only transformer)
     llama/         # LLaMA (RMSNorm + RoPE + SwiGLU + GQA)
+    mamba/         # Mamba (SSM, no attention)
     mixtral/       # Mixtral (LLaMA + MoE + sliding window)
-  training/        # Trainer, configs, dataloaders
-  tokenizer/       # BPE, naive tokenizers
+    deepseek/      # DeepSeek-V2 (MLA + MoE)
+    qwen3/         # Qwen3 (QK-Norm + weight tying)
+    gemma/         # Gemma (interleaved attention)
+    kimi/          # Kimi (MLA + MoE)
+  training/        # Trainer, DPO, GRPO, evaluation, configs
+  tokenizer/       # BPE, char, naive tokenizers
+  generate.py      # Text generation utilities
 ```
 
 ## Development
 
 ```bash
-uv run pytest tests/ -v       # Run tests (171 passing)
+uv run pytest tests/ -v       # Run tests (500+ passing)
 uv run ruff check src/ tests/ # Lint
 uv run ruff format src/ tests/ # Format
 uv run pyright src/            # Type check

@@ -75,13 +75,13 @@ Our SSD layer implements both forms:
 - **Quadratic** (attention): materialize full T×T matrix, O(T²) time
 
 ```python
-from lmt.layers.attention.ssd import SSD
+from lmt.layers.attention.ssd import SSDAttention
 
-ssd = SSD(config)
+ssd = SSDAttention(config)
 x = torch.randn(2, 16, 32)
 
-y_recurrent = ssd._forward_recurrent(x)
-y_quadratic = ssd._forward_quadratic(x)
+y_recurrent = ssd.forward_recurrent(x)
+y_quadratic = ssd.forward_quadratic(x)
 
 # Max difference: ~1e-7 (floating-point precision)
 torch.allclose(y_recurrent, y_quadratic, atol=1e-5)  # True!

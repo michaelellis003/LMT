@@ -139,6 +139,24 @@ class TestGRPOLoss:
         # Higher KL penalty should give higher loss
         assert loss_high_kl > loss_low_kl
 
+    def test_kl_is_nonnegative(self):
+        """KL penalty should be non-negative for any inputs."""
+        for _ in range(10):
+            policy_logps = torch.randn(4, 8, requires_grad=True)
+            ref_logps = torch.randn(4, 8)
+
+            # Isolate KL term by setting kl_coeff=1 and using equal
+            # rewards (so policy_loss component is ~0)
+            loss = grpo_loss(
+                policy_logps=policy_logps,
+                old_logps=policy_logps.detach(),
+                ref_logps=ref_logps,
+                rewards=torch.ones(4),  # equal rewards -> zero advantages
+                kl_coeff=1.0,
+            )
+            # With zero advantages, loss ≈ KL term, which must be >= 0
+            assert loss >= -1e-6, f'KL penalty was negative: {loss.item()}'
+
     def test_different_group_sizes(self):
         """Works with different group sizes."""
         for g in [1, 2, 8, 16]:

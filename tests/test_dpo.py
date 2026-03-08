@@ -109,22 +109,24 @@ class TestDPOLoss:
         assert policy_rejected.grad is not None
 
     def test_no_gradient_to_ref(self):
-        """Reference log-probs should not receive gradients."""
+        """dpo_loss should internally detach reference log-probs."""
         policy_chosen = torch.tensor([-1.0, -2.0], requires_grad=True)
         policy_rejected = torch.tensor([-3.0, -4.0], requires_grad=True)
         ref_chosen = torch.tensor([-1.5, -2.5], requires_grad=True)
         ref_rejected = torch.tensor([-3.5, -4.5], requires_grad=True)
 
+        # Pass ref tensors WITHOUT detaching -- dpo_loss should
+        # handle detachment internally
         loss = dpo_loss(
             policy_chosen,
             policy_rejected,
-            ref_chosen.detach(),
-            ref_rejected.detach(),
+            ref_chosen,
+            ref_rejected,
         )
         loss.backward()
         # Policy gets gradients
         assert policy_chosen.grad is not None
-        # ref tensors were detached, so no grad
+        # dpo_loss detaches ref internally, so no grad flows
         assert ref_chosen.grad is None
         assert ref_rejected.grad is None
 

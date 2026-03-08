@@ -1,7 +1,7 @@
 [project]
 name = "pylmt"
 version = "0.7.0"
-description = "A PyTorch implementation of transformer-based language models including GPT architecture for pretraining and fine-tuning"
+description = "An educational PyTorch library for modern transformer architectures: GPT, LLaMA, Mamba, Mixtral, DeepSeek, and more"
 authors = [
     {name = "Michael Ellis",email = "michaelellis003@gmail.com"}
 ]
