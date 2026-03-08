@@ -65,7 +65,11 @@ def lmt_config_to_hf(
         'architectures': _HF_ARCHITECTURES[model_type],
         'hidden_size': config.embed_dim,
         'num_attention_heads': config.num_heads,
-        'num_key_value_heads': config.num_kv_heads,
+        'num_key_value_heads': (
+            config.num_kv_heads
+            if config.num_kv_heads is not None
+            else config.num_heads
+        ),
         'num_hidden_layers': config.num_layers,
         'intermediate_size': config.ffn_hidden_dim,
         'vocab_size': config.vocab_size,

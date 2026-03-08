@@ -49,6 +49,14 @@ def compute_bpb(
     Returns:
         BPB as a float. Lower is better.
 
+    .. note::
+
+        Uses non-overlapping context windows. The first token of
+        each chunk after the first has no left context, which
+        slightly inflates BPB. This is consistent for relative
+        comparisons within LMT but may differ from sliding-window
+        implementations.
+
     Raises:
         ValueError: If ``token_sequences`` is empty.
     """

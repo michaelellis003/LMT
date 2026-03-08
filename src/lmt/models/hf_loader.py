@@ -107,7 +107,9 @@ def _build_llama_mapping(config: ModelConfig) -> dict[str, str | None]:
     mapping['model.norm.weight'] = 'final_norm.weight'
 
     # LLaMA may or may not tie weights
-    if not config.tie_weights:
+    if config.tie_weights:
+        mapping['lm_head.weight'] = None  # shared with embed_tokens
+    else:
         mapping['lm_head.weight'] = 'out_head.weight'
 
     for i in range(config.num_layers):
