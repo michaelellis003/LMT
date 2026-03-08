@@ -57,8 +57,7 @@ def lmt_config_to_hf(
     if model_type not in _HF_ARCHITECTURES:
         supported = ', '.join(sorted(_HF_ARCHITECTURES))
         raise ValueError(
-            f'Unsupported model type {model_type!r}. '
-            f'Supported: {supported}'
+            f'Unsupported model type {model_type!r}. Supported: {supported}'
         )
 
     hf_config: dict = {
