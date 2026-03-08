@@ -7,7 +7,7 @@ The original decoder-only transformer architecture from OpenAI.
 GPT uses the classic transformer decoder stack:
 
 - **Learned positional embeddings** (absolute position)
-- **Post-norm** LayerNorm
+- **Pre-norm** LayerNorm
 - **Multi-head attention** with causal masking
 - **Standard FFN** with GELU activation
 
