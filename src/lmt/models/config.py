@@ -48,6 +48,7 @@ class ModelConfig:
     qkv_bias: bool = False
     ff_network: Module | None = None
     num_kv_heads: int | None = None  # None = num_heads (standard MHA)
+    ffn_hidden_dim: int | None = None  # None = use default for FFN type
     window_size: int | None = None  # None = full attention
     tie_weights: bool = False  # Tie input/output embedding weights
     qk_norm: bool = False  # Apply RMSNorm to Q and K before dot product
