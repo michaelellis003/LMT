@@ -236,16 +236,24 @@ class ExperimentRunner:
 
             tracker.log('train_loss', loss.item(), step=step)
 
-            # Periodic evaluation on full training data
+            # Periodic evaluation (batched to avoid OOM)
             if (step + 1) % config.eval_interval == 0:
                 model.eval()
+                eval_total = 0.0
+                eval_count = 0
                 with torch.no_grad():
-                    eval_logits = model(train_data[:, :-1])
-                    eval_loss = f.cross_entropy(
-                        eval_logits.reshape(-1, eval_logits.size(-1)),
-                        train_data[:, 1:].reshape(-1),
-                    )
-                tracker.log('eval_loss', eval_loss.item(), step=step)
+                    for i in range(0, num_samples, config.batch_size):
+                        eb = train_data[i : i + config.batch_size]
+                        el = model(eb[:, :-1])
+                        eloss = f.cross_entropy(
+                            el.reshape(-1, el.size(-1)),
+                            eb[:, 1:].reshape(-1),
+                            reduction='sum',
+                        )
+                        eval_total += eloss.item()
+                        eval_count += eb[:, 1:].numel()
+                avg_eval = eval_total / max(eval_count, 1)
+                tracker.log('eval_loss', avg_eval, step=step)
                 model.train()
 
         # Final loss

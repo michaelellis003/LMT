@@ -30,6 +30,13 @@ class TestMathReward:
         assert extract_math_answer('The answer is 42.') == '42'
         assert extract_math_answer('Result: -3.14') == '-3.14'
 
+    def test_extract_decimal_without_leading_digit(self):
+        """Extract .5 style numbers (no leading digit)."""
+        from lmt.training.rewards import extract_math_answer
+
+        assert extract_math_answer('The probability is .5') == '.5'
+        assert extract_math_answer('It equals .75 exactly') == '.75'
+
     def test_extract_returns_none_for_no_answer(self):
         """Return None when no answer can be extracted."""
         from lmt.training.rewards import extract_math_answer

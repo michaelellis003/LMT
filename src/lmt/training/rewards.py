@@ -69,8 +69,8 @@ def extract_math_answer(text: str) -> str | None:
     if boxed is not None:
         return boxed.strip()
 
-    # Fall back to last number (integer or decimal)
-    numbers = re.findall(r'-?\d+(?:\.\d+)?', text)
+    # Fall back to last number (integer, decimal, or .5-style)
+    numbers = re.findall(r'-?(?:\d+\.\d+|\d+|\.\d+)', text)
     if numbers:
         return numbers[-1]
 

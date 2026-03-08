@@ -135,9 +135,13 @@ def generate_responses(
 
         logits = model(inputs)[:, -1, :]  # [G, vocab]
 
-        # Temperature scaling
-        if config.temperature != 1.0:
+        # Temperature scaling (guard against division by zero)
+        if config.temperature != 1.0 and config.temperature > 0:
             logits = logits / config.temperature
+        elif config.temperature == 0:
+            # Greedy: keep only the max logit
+            max_vals = logits.max(dim=-1, keepdim=True).values
+            logits = logits.masked_fill(logits < max_vals, float('-inf'))
 
         # Top-k filtering
         if config.top_k > 0:
