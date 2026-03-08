@@ -91,8 +91,9 @@ def get_cosine_warmup_scheduler(
 
     def lr_lambda(step: int) -> float:
         """Compute LR multiplier for LambdaLR."""
-        return cosine_warmup_lr(
-            step, max_lr, warmup_steps, total_steps, min_lr
-        ) / max_lr
+        return (
+            cosine_warmup_lr(step, max_lr, warmup_steps, total_steps, min_lr)
+            / max_lr
+        )
 
     return LambdaLR(optimizer, lr_lambda)
