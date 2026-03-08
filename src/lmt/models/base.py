@@ -123,14 +123,18 @@ class BaseModel(nn.Module):
         for block in self.blocks:
             cfg_block: ConfigurableBlock = block  # type: ignore[assignment]
             if hasattr(cfg_block.attn, 'kv_cache'):
-                cfg_block.attn.kv_cache = KVCache(max_seq_len=max_seq_len)
+                object.__setattr__(
+                    cfg_block.attn,
+                    'kv_cache',
+                    KVCache(max_seq_len=max_seq_len),
+                )
 
     def disable_kv_cache(self) -> None:
         """Disable KV caching on all attention layers."""
         for block in self.blocks:
             cfg_block: ConfigurableBlock = block  # type: ignore[assignment]
             if hasattr(cfg_block.attn, 'kv_cache'):
-                cfg_block.attn.kv_cache = None
+                object.__setattr__(cfg_block.attn, 'kv_cache', None)
 
     def reset_kv_cache(self) -> None:
         """Clear cached K/V tensors without disabling caching."""

@@ -138,29 +138,28 @@ def generate_responses(
     model_config = getattr(model, 'config', None)
     ctx_len = getattr(model_config, 'context_length', None)
 
-    # Enable KV cache if requested
+    # Enable KV cache if requested — prefill processes the full
+    # prompt once, then each step only feeds the latest token.
+    _prefilled = False
     if use_kv_cache:
         model.enable_kv_cache(max_seq_len=ctx_len)  # type: ignore[union-attr]
-        # Prefill: process entire prompt in one pass
-        prefill_logits = model(sequences)
-        # Only need last token's logits for first generation step
-        logits = prefill_logits[:, -1, :]  # [G, vocab]
-        _first_step = True
+        prefill_out = model(sequences)
+        _prefilled = True
 
     for _step_idx in range(config.max_response_len):
-        if use_kv_cache:
-            if _first_step:
-                # Already have logits from prefill
-                _first_step = False
-            else:
-                # Feed only the last token — cache has the rest
-                logits = model(sequences[:, -1:])[:, -1, :]
+        if _prefilled:
+            # Use last-token logits from the prefill pass
+            logits = prefill_out[:, -1, :]  # type: ignore[possibly-undefined]
+            _prefilled = False
+        elif use_kv_cache:
+            # Feed only the last token — cache has the rest
+            logits = model(sequences[:, -1:])[:, -1, :]
         else:
             # No cache: feed full sequence (or truncated)
             inputs = (
                 sequences[:, -ctx_len:] if ctx_len is not None else sequences
             )
-            logits = model(inputs)[:, -1, :]  # [G, vocab]
+            logits = model(inputs)[:, -1, :]
 
         # Temperature scaling (guard against division by zero)
         if config.temperature != 1.0 and config.temperature > 0:
