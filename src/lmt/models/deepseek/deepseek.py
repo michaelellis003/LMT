@@ -197,9 +197,13 @@ class DeepSeekV2(nn.Module):
             nn.init.normal_(block.attn.out_proj.weight, mean=0.0, std=std)
             # Scale FFN output projection (w2 for SwiGLU / each expert)
             ffn = block.ffn
-            ffn_out = getattr(ffn, 'w2', None)
-            if ffn_out is not None and isinstance(ffn_out, nn.Linear):
-                nn.init.normal_(ffn_out.weight, mean=0.0, std=std)
+            if isinstance(ffn, MoEFeedForward):
+                for expert in ffn.experts:
+                    nn.init.normal_(expert.w2.weight, mean=0.0, std=std)
+                for expert in ffn.shared_experts:
+                    nn.init.normal_(expert.w2.weight, mean=0.0, std=std)
+            elif isinstance(ffn, SwiGLU):
+                nn.init.normal_(ffn.w2.weight, mean=0.0, std=std)
 
     def forward(self, in_idx: Tensor) -> Tensor:
         """Forward pass of DeepSeek-V2.

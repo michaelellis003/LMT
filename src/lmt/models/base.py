@@ -134,12 +134,18 @@ class BaseModel(nn.Module):
             out_proj = getattr(attn, 'out_proj', None)
             if out_proj is not None and isinstance(out_proj, nn.Linear):
                 nn.init.normal_(out_proj.weight, mean=0.0, std=std)
-            # Scale FFN output projection (w2 for SwiGLU, second linear
-            # for standard FFN)
+            # Scale FFN output projection (w2 for SwiGLU, each expert
+            # w2 for MoE, or second linear for standard FFN)
             ffn = cfg_block.ffn
-            ffn_out = getattr(ffn, 'w2', None)
-            if ffn_out is not None and isinstance(ffn_out, nn.Linear):
-                nn.init.normal_(ffn_out.weight, mean=0.0, std=std)
+            if isinstance(ffn, MoEFeedForward):
+                for expert in ffn.experts:
+                    nn.init.normal_(expert.w2.weight, mean=0.0, std=std)
+                for expert in ffn.shared_experts:
+                    nn.init.normal_(expert.w2.weight, mean=0.0, std=std)
+            else:
+                ffn_out = getattr(ffn, 'w2', None)
+                if ffn_out is not None and isinstance(ffn_out, nn.Linear):
+                    nn.init.normal_(ffn_out.weight, mean=0.0, std=std)
 
     def forward_hidden(self, in_idx: Tensor) -> Tensor:
         """Forward pass returning hidden states before the LM head.
