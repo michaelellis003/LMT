@@ -263,3 +263,28 @@ class TestExperimentRunner:
 
         assert len(runner.results) == 3
         assert all(r.final_loss is not None for r in runner.results)
+
+    def test_eval_interval_logs_eval_loss(self, tmp_path: Path):
+        """Eval loss should be logged at eval_interval steps."""
+        from lmt.research.experiment import (
+            ExperimentRunConfig,
+            ExperimentRunner,
+        )
+
+        model = _TinyModel()
+        data = torch.randint(0, 32, (10, 8))
+        config = ExperimentRunConfig(
+            name='eval_test',
+            train_steps=10,
+            eval_interval=5,
+            lr=1e-3,
+        )
+
+        runner = ExperimentRunner(output_dir=str(tmp_path))
+        result = runner.run(model, data, config)
+
+        eval_history = result.metrics.get_history('eval_loss')
+        # Should have 2 eval points: step 4 and step 9 (0-indexed)
+        assert len(eval_history) == 2
+        assert eval_history[0][0] == 4  # step 5 (0-indexed)
+        assert eval_history[1][0] == 9  # step 10 (0-indexed)

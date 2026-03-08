@@ -235,6 +235,18 @@ class ExperimentRunner:
 
             tracker.log('train_loss', loss.item(), step=step)
 
+            # Periodic evaluation on full training data
+            if (step + 1) % config.eval_interval == 0:
+                model.eval()
+                with torch.no_grad():
+                    eval_logits = model(train_data[:, :-1])
+                    eval_loss = f.cross_entropy(
+                        eval_logits.reshape(-1, eval_logits.size(-1)),
+                        train_data[:, 1:].reshape(-1),
+                    )
+                tracker.log('eval_loss', eval_loss.item(), step=step)
+                model.train()
+
         # Final loss
         final_loss = tracker.get_history('train_loss')[-1][1]
 

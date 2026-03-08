@@ -193,7 +193,15 @@ def format_reward(
     """Reward based on response format compliance.
 
     Checks for required XML-style tags in the response. Returns
-    the fraction of required tags that are present.
+    the fraction of required tags that are present (both opening
+    and closing).
+
+    .. note::
+
+        This checks tag *presence*, not proper nesting or order.
+        A response with ``</think><think>`` would still match.
+        For GRPO training this is sufficient -- malformed tag
+        order is rare and self-corrects with training.
 
     Args:
         response: The model's response text.

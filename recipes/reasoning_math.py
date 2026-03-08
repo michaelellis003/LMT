@@ -75,27 +75,32 @@ def create_math_prompts() -> list[MathDataItem]:
 def make_reward_fn(
     ground_truth: str,
 ) -> collections.abc.Callable[[torch.Tensor, torch.Tensor], float]:
-    """Create a reward function for a specific math problem.
+    r"""Create a placeholder reward function for a math problem.
+
+    .. warning::
+
+        This is a **stub** that returns random binary rewards.
+        It does NOT decode tokens or check against ``ground_truth``.
+        A real implementation would use a tokenizer to decode
+        ``response_ids`` back to text, then call
+        :func:`lmt.training.rewards.math_reward` to compare
+        the extracted answer against ``ground_truth``.
 
     Args:
-        ground_truth: The correct answer string.
+        ground_truth: The correct answer string (unused in this stub).
 
     Returns:
-        Callable(prompt_ids, response_ids) -> float.
+        Callable(prompt_ids, response_ids) -> float that returns
+        random 0.0 or 1.0 (placeholder).
     """
 
     def reward_fn(
         prompt_ids: torch.Tensor,
         response_ids: torch.Tensor,
     ) -> float:
-        """Score a response against ground truth.
-
-        Note: In a real setup, we'd decode the response tokens back to
-        text using the tokenizer. For this recipe, we return a random
-        reward to demonstrate the training loop.
-        """
+        """Return random binary reward (placeholder)."""
         # TODO: Integrate tokenizer for proper decoding
-        # For now, return random reward to test the loop
+        # Real version: decode response_ids → text → math_reward()
         return float(torch.rand(1).item() > 0.5)
 
     return reward_fn
@@ -163,7 +168,14 @@ def run_dry_run() -> None:
 
 
 def run_training(args: argparse.Namespace) -> None:
-    """Run full GRPO math reasoning training.
+    """Set up experiment config for GRPO math reasoning training.
+
+    .. note::
+
+        This is a **placeholder** that saves the experiment config
+        and prints the planned training parameters. Actual training
+        requires GPU access and pretrained model weights (loaded via
+        HuggingFace). Use ``--dry_run`` to validate the pipeline on CPU.
 
     Args:
         args: Parsed command-line arguments.
