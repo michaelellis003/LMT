@@ -56,6 +56,7 @@ def newton_schulz(g: Tensor, steps: int = 5) -> Tensor:
     # Quintic coefficients maximizing slope at zero
     a, b, c = (3.4445, -4.7750, 2.0315)
 
+    orig_dtype = g.dtype
     x = g.bfloat16()
 
     # Work with the shorter dimension for efficiency
@@ -75,7 +76,7 @@ def newton_schulz(g: Tensor, steps: int = 5) -> Tensor:
     if transposed:
         x = x.mT
 
-    return x
+    return x.to(orig_dtype)
 
 
 class Muon(Optimizer):
@@ -188,8 +189,9 @@ class Muon(Optimizer):
                 # Momentum update: buf = beta * buf + (1 - beta) * grad
                 buf.lerp_(grad, 1 - beta)
 
-                # Nesterov: use grad + beta * buf instead of just buf
-                update = grad.lerp_(buf, beta) if nesterov else buf
+                # Nesterov: blend grad toward buf (non-in-place to
+                # avoid corrupting p.grad for other consumers)
+                update = grad.lerp(buf, beta) if nesterov else buf
 
                 # Reshape 4D (conv) to 2D for orthogonalization
                 original_shape = update.shape

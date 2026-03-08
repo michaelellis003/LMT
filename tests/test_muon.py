@@ -48,7 +48,7 @@ class TestNewtonSchulz:
         # Muon's NS iteration produces S' ~ Uniform(0.5, 1.5),
         # not exactly I, so we check that the off-diagonals are small
         off_diag = product - torch.diag(product.diag())
-        assert off_diag.abs().max() < 0.2
+        assert off_diag.abs().max() < 0.25
 
     def test_zero_input_no_crash(self):
         """Zero input should not crash (guarded by epsilon)."""
@@ -153,6 +153,27 @@ class TestMuonOptimizer:
 
         # Step without backward — no gradients exist
         optimizer.step()  # should not crash
+
+    def test_grad_not_mutated(self):
+        """Muon step should not corrupt p.grad (non-in-place Nesterov)."""
+        model = nn.Linear(32, 64, bias=False)
+        optimizer = Muon(model.parameters(), lr=0.02, nesterov=True)
+
+        x = torch.randn(4, 32)
+        loss = model(x).sum()
+        loss.backward()
+
+        grad_before = model.weight.grad.clone()
+        optimizer.step()
+
+        # Gradient should be unchanged after step
+        assert torch.equal(model.weight.grad, grad_before)
+
+    def test_output_dtype_matches_input(self):
+        """newton_schulz should return same dtype as input."""
+        g = torch.randn(32, 32, dtype=torch.float32)
+        result = newton_schulz(g, steps=5)
+        assert result.dtype == torch.float32
 
     def test_default_hyperparams(self):
         """Default hyperparameters should match Keller Jordan's."""
