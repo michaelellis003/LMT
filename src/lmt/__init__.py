@@ -21,9 +21,12 @@ particular their use in Large Language Models (LLM).
 """
 
 from .models import ModelConfig
+from .models.gemma import Gemma
 from .models.gpt import GPT
+from .models.kimi import Kimi
 from .models.llama import LLaMA
 from .models.mamba import Mamba
+from .models.qwen3 import Qwen3
 from .tokenizer import (
     BaseTokenizer,
     BPETokenizer,
@@ -34,9 +37,12 @@ from .training import Trainer
 
 __all__ = [
     'ModelConfig',
+    'Gemma',
     'GPT',
+    'Kimi',
     'LLaMA',
     'Mamba',
+    'Qwen3',
     'Trainer',
     'BaseTokenizer',
     'BPETokenizer',

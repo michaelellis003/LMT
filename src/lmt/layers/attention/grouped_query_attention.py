@@ -105,6 +105,14 @@ class GroupedQueryAttention(nn.Module):
         )
         self.out_proj = nn.Linear(embed_dim, embed_dim, bias=False)
 
+        # QK-Norm: normalize Q and K before dot product (Qwen3, Gemma 3)
+        self.qk_norm = getattr(model_config, 'qk_norm', False)
+        if self.qk_norm:
+            from lmt.layers.normalization.rms_norm import RMSNorm
+
+            self.q_norm = RMSNorm(self.head_dim)
+            self.k_norm = RMSNorm(self.head_dim)
+
         # Build mask: causal with optional sliding window
         ctx = model_config.context_length
         if window_size is not None:
@@ -145,6 +153,11 @@ class GroupedQueryAttention(nn.Module):
         q = q.view(b, seq_len, self.num_heads, self.head_dim)
         k = k.view(b, seq_len, self.num_kv_heads, self.head_dim)
         v = v.view(b, seq_len, self.num_kv_heads, self.head_dim)
+
+        # QK-Norm: normalize per-head before RoPE and dot product
+        if self.qk_norm:
+            q = self.q_norm(q)
+            k = self.k_norm(k)
 
         # Apply RoPE to Q and K if configured
         if self.rope is not None:

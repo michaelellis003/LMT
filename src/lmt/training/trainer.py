@@ -59,6 +59,7 @@ class Trainer:
         config: BaseTrainingConfig,
         tokenizer: BaseTokenizer | None = None,
         curriculum: CurriculumSchedule | None = None,
+        scheduler: torch.optim.lr_scheduler.LRScheduler | None = None,
     ):
         """Initializes the BaseTrainer.
 
@@ -72,6 +73,9 @@ class Trainer:
             curriculum: An optional curriculum schedule that controls
                 sequence length during training. When provided, batches
                 are truncated according to the schedule.
+            scheduler: An optional PyTorch LR scheduler. When provided,
+                ``scheduler.step()`` is called after each optimizer step.
+                Use any ``torch.optim.lr_scheduler`` class.
         """
         self.model = model
         self.train_loader = train_loader
@@ -79,6 +83,7 @@ class Trainer:
         self.config = config
         self.tokenizer = tokenizer
         self.curriculum = curriculum
+        self.scheduler = scheduler
 
         self.device = torch.device(config.device)
         self.model.to(self.device)
@@ -102,16 +107,34 @@ class Trainer:
         self.global_step = -1
         self.track_global_steps: list[int] = []
 
-        # TensorBoard logging (enabled when run_name is set)
-        self.writer: Any = None
+        # MLflow logging (enabled when run_name is set)
+        self._mlflow_active = False
         run_name = getattr(config, 'run_name', None)
         if run_name:
-            from torch.utils.tensorboard import SummaryWriter
+            import mlflow
 
-            log_dir = Path(config.save_dir) / 'tb_logs' / run_name
-            self.writer = SummaryWriter(log_dir=str(log_dir))
+            self._mlflow = mlflow
+            tracking_uri = Path(config.save_dir).resolve() / 'mlruns'
+            mlflow.set_tracking_uri(f'file://{tracking_uri}')
+            mlflow.set_experiment('lmt')
+            mlflow.start_run(run_name=run_name)
+            self._mlflow_active = True
+
+            # Log training config as params
             param_count = sum(p.numel() for p in model.parameters())
-            self.writer.add_scalar('model/param_count', param_count, 0)
+            mlflow.log_params(
+                {
+                    'num_epochs': config.num_epochs,
+                    'learning_rate': config.learning_rate,
+                    'weight_decay': config.weight_decay,
+                    'batch_size': config.batch_size,
+                    'eval_freq': config.eval_freq,
+                    'max_grad_norm': str(config.max_grad_norm),
+                    'task': config.task,
+                    'device': config.device,
+                    'param_count': param_count,
+                }
+            )
 
     def train_step(
         self, input_batch: torch.Tensor, target_batch: torch.Tensor
@@ -200,20 +223,25 @@ class Trainer:
                         self.config.max_grad_norm,
                     )
                 self.optimizer.step()
+                if self.scheduler is not None:
+                    self.scheduler.step()
 
-                # Log step-level training loss to TensorBoard
-                if self.writer is not None:
-                    self.writer.add_scalar(
-                        'loss/train_step',
-                        loss.item(),
-                        self.global_step,
-                    )
+                # Log step-level metrics to MLflow
+                if self._mlflow_active:
+                    step_metrics: dict[str, float] = {
+                        'train_step_loss': loss.item(),
+                    }
                     if self.curriculum is not None:
-                        self.writer.add_scalar(
-                            'curriculum/seq_length',
-                            self.curriculum.get_length(self.global_step),
-                            self.global_step,
+                        step_metrics['curriculum_seq_length'] = (
+                            self.curriculum.get_length(self.global_step)
                         )
+                    if self.scheduler is not None:
+                        step_metrics['lr'] = self.optimizer.param_groups[0][
+                            'lr'
+                        ]
+                    self._mlflow.log_metrics(
+                        step_metrics, step=self.global_step
+                    )
 
                 # Periodic evaluation
                 if self.global_step % self.config.eval_freq == 0:
@@ -221,13 +249,14 @@ class Trainer:
                     self.train_losses.append(train_loss)
                     self.val_losses.append(val_loss)
 
-                    # Log eval losses to TensorBoard
-                    if self.writer is not None:
-                        self.writer.add_scalar(
-                            'loss/train', train_loss, self.global_step
-                        )
-                        self.writer.add_scalar(
-                            'loss/val', val_loss, self.global_step
+                    # Log eval losses to MLflow
+                    if self._mlflow_active:
+                        self._mlflow.log_metrics(
+                            {
+                                'train_loss': train_loss,
+                                'val_loss': val_loss,
+                            },
+                            step=self.global_step,
                         )
 
                     print(
@@ -239,9 +268,10 @@ class Trainer:
         end_time = time.time()
         execution_time = (end_time - start_time) / 60
 
-        # Close TensorBoard writer
-        if self.writer is not None:
-            self.writer.close()
+        # End MLflow run
+        if self._mlflow_active:
+            self._mlflow.end_run()
+            self._mlflow_active = False
 
         print(f'Training completed in {execution_time:.2f} minutes.')
 

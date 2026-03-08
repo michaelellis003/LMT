@@ -77,7 +77,7 @@ class BaseTrainingConfig:
             max_grad_norm (float | None, optional): Maximum gradient norm for
                 clipping. Set to None to disable. Defaults to 1.0.
             run_name (str | None, optional): Name for this experiment run.
-                Enables TensorBoard logging when set. Defaults to None.
+                Enables MLflow logging when set. Defaults to None.
             **kwargs (Any): Additional keyword arguments stored as attributes.
         """
         self.num_epochs = num_epochs

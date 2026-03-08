@@ -83,11 +83,15 @@ nav:
       - Multi-Token Prediction: architecture/multi-token-prediction.md
       - YaRN Context Extension: architecture/yarn.md
       - Mixture of Depths: architecture/mixture-of-depths.md
+      - Alignment (DPO & GRPO): architecture/alignment.md
   - Models:
       - GPT: models/gpt.md
       - LLaMA: models/llama.md
+      - Qwen3: models/qwen3.md
+      - Gemma: models/gemma.md
       - Mixtral: models/mixtral.md
       - DeepSeek-V2: models/deepseek.md
+      - Kimi K2: models/kimi.md
       - Mamba: models/mamba.md
   - Experiments:
       - Overview: experiments/index.md

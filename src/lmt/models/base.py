@@ -14,6 +14,7 @@ import math
 import torch
 import torch.nn as nn
 from torch import Tensor
+from torch.utils.checkpoint import checkpoint as grad_checkpoint
 
 from lmt.layers.blocks.configurable_block import BlockConfig, ConfigurableBlock
 from lmt.layers.ffn.moe import MoEFeedForward
@@ -28,23 +29,30 @@ class BaseModel(nn.Module):
     LLaMA-like model. Pass a different ``BlockConfig`` to get
     Mixtral (MoE FFN), GPT (MHA + default FFN), etc.
 
+    Supports per-layer configuration via a list of ``BlockConfig``
+    objects, enabling interleaved patterns like local/global
+    attention (Gemma 3) or mixed FFN types.
+
     Args:
         config: Model-level configuration.
-        block_config: Per-block component selection. Defaults to
-            GQA + SwiGLU + RMSNorm (LLaMA-like).
+        block_config: Per-block component selection. Can be a single
+            config (applied to all layers), a list of configs (one
+            per layer), or None for defaults.
     """
 
     def __init__(
         self,
         config: ModelConfig,
-        block_config: BlockConfig | None = None,
+        block_config: BlockConfig | list[BlockConfig] | None = None,
         learned_pos_embed: bool = False,
     ) -> None:
         """Initialize BaseModel.
 
         Args:
             config: Model configuration.
-            block_config: Block component selection. If None, uses
+            block_config: Block component selection. A single config
+                is applied to all layers. A list provides per-layer
+                configs (length must match num_layers). None uses
                 defaults (GQA + SwiGLU + RMSNorm).
             learned_pos_embed: If True, adds a learned positional
                 embedding (GPT-style). If False, positional info
@@ -52,8 +60,19 @@ class BaseModel(nn.Module):
                 layer.
         """
         super().__init__()
+
+        # Normalize block_config to a list of per-layer configs
         if block_config is None:
-            block_config = BlockConfig()
+            block_configs = [BlockConfig()] * config.num_layers
+        elif isinstance(block_config, list):
+            if len(block_config) != config.num_layers:
+                raise ValueError(
+                    f'block_config list length ({len(block_config)}) '
+                    f'must match num_layers ({config.num_layers})'
+                )
+            block_configs = block_config
+        else:
+            block_configs = [block_config] * config.num_layers
 
         self.config = config
         self.tok_embed = nn.Embedding(config.vocab_size, config.embed_dim)
@@ -67,21 +86,26 @@ class BaseModel(nn.Module):
         self.drop = nn.Dropout(config.dropout)
 
         self.blocks = nn.ModuleList(
-            [
-                ConfigurableBlock(config, block_config)
-                for _ in range(config.num_layers)
-            ]
+            [ConfigurableBlock(config, bc) for bc in block_configs]
         )
 
-        norm_cls = NORM_REGISTRY[block_config.norm]
+        # Use the last layer's norm for final norm
+        norm_cls = NORM_REGISTRY[block_configs[-1].norm]
         self.final_norm = norm_cls(config.embed_dim)
         self.out_head = nn.Linear(
             config.embed_dim, config.vocab_size, bias=False
         )
 
+        # Tie input/output embedding weights
+        if config.tie_weights:
+            self.out_head.weight = self.tok_embed.weight
+
         # Track whether any block has MoE for aux_loss collection
-        self._has_moe = block_config.ffn == 'moe'
+        self._has_moe = any(bc.ffn == 'moe' for bc in block_configs)
         self.aux_loss = torch.tensor(0.0)
+
+        # Gradient checkpointing: trade compute for memory
+        self.gradient_checkpointing = False
 
         self._init_weights()
 
@@ -140,6 +164,9 @@ class BaseModel(nn.Module):
                 if isinstance(cfg_block.ffn, MoEFeedForward):
                     total_aux = total_aux + cfg_block.ffn.aux_loss
             self.aux_loss = total_aux
+        elif self.gradient_checkpointing and self.training:
+            for block in self.blocks:
+                x = grad_checkpoint(block, x, use_reentrant=False)
         else:
             for block in self.blocks:
                 x = block(x)
