@@ -81,14 +81,16 @@ class MultiHeadLatentAttention(nn.Module):
         qk_dim = self.head_dim + rope_dim
         self.scale = 1.0 / math.sqrt(qk_dim)
 
-        # Q content path: x -> compress -> decompress
+        # Q content path: x -> compress -> norm -> decompress
         self.w_dq = nn.Linear(embed_dim, q_compress_dim, bias=False)
+        self.q_norm = nn.RMSNorm(q_compress_dim)
         self.w_uq = nn.Linear(
             q_compress_dim, num_heads * self.head_dim, bias=False
         )
 
-        # KV path: x -> compress -> decompress to K_content and V
+        # KV path: x -> compress -> norm -> decompress to K_content and V
         self.w_dkv = nn.Linear(embed_dim, kv_compress_dim, bias=False)
+        self.kv_norm = nn.RMSNorm(kv_compress_dim)
         self.w_uk = nn.Linear(
             kv_compress_dim, num_heads * self.head_dim, bias=False
         )
@@ -139,8 +141,8 @@ class MultiHeadLatentAttention(nn.Module):
         # Track position offset for RoPE when using cache
         pos_offset = self.kv_cache.seq_len if self.kv_cache is not None else 0
 
-        # Compress query
-        c_q = self.w_dq(x)  # [b, seq, q_compress_dim]
+        # Compress query and normalize latent
+        c_q = self.q_norm(self.w_dq(x))  # [b, seq, q_compress_dim]
 
         # Content Q: decompress from query latent
         q_c = self.w_uq(c_q)  # [b, seq, num_heads * head_dim]
@@ -148,8 +150,8 @@ class MultiHeadLatentAttention(nn.Module):
             1, 2
         )
 
-        # Compress KV
-        c_kv = self.w_dkv(x)  # [b, seq, kv_compress_dim]
+        # Compress KV and normalize latent
+        c_kv = self.kv_norm(self.w_dkv(x))  # [b, seq, kv_compress_dim]
 
         # Content K and V: decompress from KV latent
         k_c = self.w_uk(c_kv)  # [b, seq, num_heads * head_dim]
