@@ -94,6 +94,7 @@ def generate_responses(
     model: nn.Module,
     prompt: torch.Tensor,
     config: GenerationConfig,
+    use_kv_cache: bool = False,
 ) -> torch.Tensor:
     """Generate a group of responses for a prompt.
 
@@ -101,11 +102,19 @@ def generate_responses(
     generates ``config.group_size`` responses using autoregressive
     sampling with temperature, top-k, and top-p filtering.
 
+    When ``use_kv_cache=True``, the model's KV cache is enabled for
+    the duration of generation and disabled afterward. This avoids
+    recomputing K/V for all previous tokens at each step, reducing
+    generation from O(n^2) to O(n) total work.
+
     Args:
         model: Language model that accepts token IDs and returns
             logits ``[batch, seq_len, vocab_size]``.
         prompt: Prompt token IDs ``[prompt_len]`` (1D).
         config: Generation configuration.
+        use_kv_cache: If True, enable KV caching during generation.
+            Requires the model to have ``enable_kv_cache()`` and
+            ``disable_kv_cache()`` methods (e.g., ``BaseModel``).
 
     Returns:
         Full sequences (prompt + response) of shape
@@ -129,11 +138,29 @@ def generate_responses(
     model_config = getattr(model, 'config', None)
     ctx_len = getattr(model_config, 'context_length', None)
 
-    for _ in range(config.max_response_len):
-        # Truncate to context window if needed
-        inputs = sequences[:, -ctx_len:] if ctx_len is not None else sequences
+    # Enable KV cache if requested
+    if use_kv_cache:
+        model.enable_kv_cache(max_seq_len=ctx_len)  # type: ignore[union-attr]
+        # Prefill: process entire prompt in one pass
+        prefill_logits = model(sequences)
+        # Only need last token's logits for first generation step
+        logits = prefill_logits[:, -1, :]  # [G, vocab]
+        _first_step = True
 
-        logits = model(inputs)[:, -1, :]  # [G, vocab]
+    for _step_idx in range(config.max_response_len):
+        if use_kv_cache:
+            if _first_step:
+                # Already have logits from prefill
+                _first_step = False
+            else:
+                # Feed only the last token — cache has the rest
+                logits = model(sequences[:, -1:])[:, -1, :]
+        else:
+            # No cache: feed full sequence (or truncated)
+            inputs = (
+                sequences[:, -ctx_len:] if ctx_len is not None else sequences
+            )
+            logits = model(inputs)[:, -1, :]  # [G, vocab]
 
         # Temperature scaling (guard against division by zero)
         if config.temperature != 1.0 and config.temperature > 0:
@@ -182,6 +209,10 @@ def generate_responses(
                     )
                     sequences = torch.cat([sequences, pad], dim=1)
                 break
+
+    # Clean up KV cache
+    if use_kv_cache:
+        model.disable_kv_cache()  # type: ignore[union-attr]
 
     if was_training:
         model.train()

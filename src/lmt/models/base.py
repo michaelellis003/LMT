@@ -16,6 +16,7 @@ import torch.nn as nn
 from torch import Tensor
 from torch.utils.checkpoint import checkpoint as grad_checkpoint
 
+from lmt.layers.attention.kv_cache import KVCache
 from lmt.layers.blocks.configurable_block import BlockConfig, ConfigurableBlock
 from lmt.layers.ffn.moe import MoEFeedForward
 from lmt.layers.normalization import NORM_REGISTRY
@@ -108,6 +109,36 @@ class BaseModel(nn.Module):
         self.gradient_checkpointing = False
 
         self._init_weights()
+
+    def enable_kv_cache(self, max_seq_len: int | None = None) -> None:
+        """Enable KV caching on all attention layers.
+
+        Creates a fresh KVCache on each attention layer. If caching
+        was already enabled, resets all caches.
+
+        Args:
+            max_seq_len: Maximum cached sequence length per layer.
+                None for unlimited.
+        """
+        for block in self.blocks:
+            cfg_block: ConfigurableBlock = block  # type: ignore[assignment]
+            if hasattr(cfg_block.attn, 'kv_cache'):
+                cfg_block.attn.kv_cache = KVCache(max_seq_len=max_seq_len)
+
+    def disable_kv_cache(self) -> None:
+        """Disable KV caching on all attention layers."""
+        for block in self.blocks:
+            cfg_block: ConfigurableBlock = block  # type: ignore[assignment]
+            if hasattr(cfg_block.attn, 'kv_cache'):
+                cfg_block.attn.kv_cache = None
+
+    def reset_kv_cache(self) -> None:
+        """Clear cached K/V tensors without disabling caching."""
+        for block in self.blocks:
+            cfg_block: ConfigurableBlock = block  # type: ignore[assignment]
+            cache = getattr(cfg_block.attn, 'kv_cache', None)
+            if cache is not None:
+                cache.reset()
 
     def _init_weights(self) -> None:
         """Initialize weights with scaled residual init.
