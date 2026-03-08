@@ -133,8 +133,9 @@ def code_reward(
     """Reward based on code compilation and test results.
 
     Executes code in a subprocess with the given tests. Returns
-    graded reward: 0.0 for syntax/runtime errors, 0.3 for code
-    that runs but fails tests, 1.0 for all tests passing.
+    graded reward: 0.0 for syntax errors, partial credit based
+    on the fraction of tests that pass (e.g., 2/4 tests → 0.5),
+    and 1.0 when all tests pass.
 
     .. warning::
 
@@ -158,27 +159,54 @@ def code_reward(
     if language != 'python':
         raise NotImplementedError(f'Language {language!r} not yet supported')
 
-    # Combine code and tests into a single script
-    full_script = f'{code}\n\n{tests}'
+    # First check that the code itself compiles
+    try:
+        compile(code, '<code>', 'exec')
+    except SyntaxError:
+        return 0.0
+
+    # Wrap each test assertion individually to count passes
+    test_lines = [
+        line
+        for line in tests.strip().splitlines()
+        if line.strip() and not line.strip().startswith('#')
+    ]
+    num_tests = max(len(test_lines), 1)
+
+    # Build a script that runs each test and tracks results
+    runner_script = f'{code}\n\n_passed = 0\n_total = {num_tests}\n'
+    for line in test_lines:
+        # Each test wrapped in try/except to count passes
+        runner_script += (
+            f'try:\n    {line}\n    _passed += 1\n'
+            f'except Exception:\n    pass\n'
+        )
+    runner_script += 'print(f"{_passed}/{_total}")\n'
 
     try:
         result = subprocess.run(
-            [sys.executable, '-c', full_script],
+            [sys.executable, '-c', runner_script],
             capture_output=True,
             text=True,
             timeout=timeout,
         )
 
-        if result.returncode == 0:
-            return 1.0
-
-        # Check if it's a syntax error vs runtime error
-        stderr = result.stderr
-        if 'SyntaxError' in stderr:
+        if result.returncode != 0 and 'SyntaxError' in result.stderr:
             return 0.0
 
-        # Code ran but tests failed -> partial credit
-        return 0.3
+        # Parse pass count from stdout
+        stdout = result.stdout.strip()
+        if '/' in stdout:
+            parts = stdout.rsplit('/', 1)
+            try:
+                passed = int(parts[0].split('\n')[-1])
+                total = int(parts[1])
+                return passed / total if total > 0 else 0.0
+            except (ValueError, IndexError):
+                pass
+
+        # Fallback: if script ran but we can't parse, give 0.0
+        return 0.0
 
     except subprocess.TimeoutExpired:
         return 0.0

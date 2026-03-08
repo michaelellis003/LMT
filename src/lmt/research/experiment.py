@@ -211,13 +211,16 @@ class ExperimentRunner:
         tracker = MetricTracker()
         optimizer = torch.optim.AdamW(model.parameters(), lr=config.lr)
 
+        # Infer device from model parameters
+        model_device = next(model.parameters()).device
+
         model.train()
         num_samples = train_data.shape[0]
 
         for step in range(config.train_steps):
-            # Sample a batch
+            # Sample a batch and move to model device
             indices = torch.randint(0, num_samples, (config.batch_size,))
-            batch = train_data[indices]
+            batch = train_data[indices].to(model_device)
 
             # Forward pass (next-token prediction)
             inputs = batch[:, :-1]
@@ -243,7 +246,9 @@ class ExperimentRunner:
                 eval_count = 0
                 with torch.no_grad():
                     for i in range(0, num_samples, config.batch_size):
-                        eb = train_data[i : i + config.batch_size]
+                        eb = train_data[i : i + config.batch_size].to(
+                            model_device
+                        )
                         el = model(eb[:, :-1])
                         eloss = f.cross_entropy(
                             el.reshape(-1, el.size(-1)),

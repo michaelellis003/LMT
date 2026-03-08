@@ -62,7 +62,10 @@ class GRPOConfig:
     device: str = 'cpu'
 
 
-# Type alias for reward functions
+# Type alias for GRPO reward functions.
+# Takes (prompt_ids: Tensor, response_ids: Tensor) -> float.
+# To use string-based rewards from lmt.training.rewards, wrap them
+# in a lambda that decodes tensor IDs via your tokenizer first.
 RewardFn = Callable[[torch.Tensor, torch.Tensor], float]
 
 

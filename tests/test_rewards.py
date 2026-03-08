@@ -111,14 +111,29 @@ class TestCodeReward:
         assert reward == 0.0
 
     def test_code_reward_wrong_output(self):
-        """Code that compiles but fails tests gets partial reward."""
+        """Code that compiles but fails tests gets 0.0."""
         from lmt.training.rewards import code_reward
 
         code = 'def add(a, b):\n    return a - b'  # wrong operation
         tests = 'assert add(2, 3) == 5'
 
         reward = code_reward(code=code, tests=tests, language='python')
-        assert 0.0 < reward < 1.0  # partial credit for compiling
+        assert reward == 0.0  # 0 of 1 tests pass
+
+    def test_code_reward_partial_credit(self):
+        """Code that passes some tests gets proportional credit."""
+        from lmt.training.rewards import code_reward
+
+        code = 'def add(a, b):\n    return a + b'
+        # 2 tests pass, 1 fails
+        tests = (
+            'assert add(2, 3) == 5\n'
+            'assert add(-1, 1) == 0\n'
+            'assert add(0, 0) == 999'  # wrong expected value
+        )
+
+        reward = code_reward(code=code, tests=tests, language='python')
+        assert abs(reward - 2.0 / 3.0) < 1e-6
 
     def test_code_reward_timeout(self):
         """Infinite loop should timeout and get 0.0."""
