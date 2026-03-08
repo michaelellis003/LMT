@@ -104,7 +104,8 @@ def grpo_loss(
 
     # KL penalty: approximate KL(pi_theta || pi_ref) per token
     # Using the unbiased estimator: exp(log_ratio) - log_ratio - 1
-    kl_log_ratios = policy_logps - ref_logps.detach()
+    # Clamp log ratios to prevent exp() overflow for numerical stability
+    kl_log_ratios = (policy_logps - ref_logps.detach()).clamp(-10.0, 10.0)
     kl = (kl_log_ratios.exp() - kl_log_ratios - 1.0).mean()
 
     return policy_loss + kl_coeff * kl

@@ -23,7 +23,7 @@ def generate(
     model: nn.Module,
     idx: torch.Tensor,
     max_new_tokens: int,
-    context_size: int | torch.Tensor,
+    context_size: int,
     temperature: float = 1.0,
     top_k: int | None = None,
     eos_id: int | None = None,
@@ -41,7 +41,7 @@ def generate(
         idx (torch.Tensor): The initial sequence of token IDs, representing the
             prompt. Shape: (batch_size, sequence_length).
         max_new_tokens (int): The maximum number of new tokens to generate.
-        context_size (int | torch.Tensor): The model's context window size. The
+        context_size (int): The model's context window size. The
             input sequence will be cropped from the left to this size if it is
             too long.
         temperature (float, optional): Controls the randomness of the

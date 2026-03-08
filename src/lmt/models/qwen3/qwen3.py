@@ -20,6 +20,8 @@ Implemented as a thin wrapper around ``BaseModel`` that forces
 ``qk_norm=True`` and ``tie_weights=True`` in the config.
 """
 
+import dataclasses
+
 from lmt.layers.blocks.configurable_block import BlockConfig
 from lmt.layers.positional import RoPE
 from lmt.models.base import BaseModel
@@ -40,9 +42,10 @@ class Qwen3(BaseModel):
                 ``tie_weights`` are forced True regardless of
                 the config values.
         """
-        # Force Qwen3-specific features
-        config.qk_norm = True
-        config.tie_weights = True
+        # Copy to avoid mutating caller's config
+        config = dataclasses.replace(
+            config, qk_norm=True, tie_weights=True
+        )
 
         head_dim = config.embed_dim // config.num_heads
         rope = RoPE(
