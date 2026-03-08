@@ -475,6 +475,7 @@ class TestConfigConversion:
         assert config.context_length == 40960
         assert config.tie_weights is True
         assert config.qk_norm is True
+        assert config.ffn_hidden_dim == 3072
 
     def test_llama_config_from_dict(self):
         """Convert a LLaMA config.json dict to ModelConfig."""
@@ -499,6 +500,7 @@ class TestConfigConversion:
         assert config.num_kv_heads == 8
         assert config.tie_weights is False
         assert config.qk_norm is False
+        assert config.ffn_hidden_dim == 8192
 
 
 # ============================================================

@@ -171,6 +171,7 @@ def config_from_hf(hf_config: dict) -> ModelConfig:
         num_heads=hf_config['num_attention_heads'],
         num_kv_heads=hf_config.get('num_key_value_heads'),
         num_layers=hf_config['num_hidden_layers'],
+        ffn_hidden_dim=hf_config.get('intermediate_size'),
         vocab_size=hf_config['vocab_size'],
         context_length=hf_config.get('max_position_embeddings', 2048),
         tie_weights=hf_config.get('tie_word_embeddings', False),
