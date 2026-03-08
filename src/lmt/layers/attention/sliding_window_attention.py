@@ -10,6 +10,12 @@ after ``L`` layers, a token can attend to positions up to
 
 When ``window_size >= seq_len``, this is equivalent to standard
 causal attention.
+
+References:
+    Beltagy et al., 2020 -- "Longformer: The Long-Document Transformer"
+    https://arxiv.org/abs/2004.05150
+    Jiang et al., 2023 -- "Mistral 7B"
+    https://arxiv.org/abs/2310.06825
 """
 
 import math

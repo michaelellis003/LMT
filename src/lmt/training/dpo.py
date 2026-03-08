@@ -83,9 +83,9 @@ def dpo_loss(
     Returns:
         Scalar DPO loss (mean over batch).
     """
-    # Log-ratio advantages
-    chosen_logratios = policy_chosen_logps - ref_chosen_logps
-    rejected_logratios = policy_rejected_logps - ref_rejected_logps
+    # Log-ratio advantages (detach reference to prevent gradient flow)
+    chosen_logratios = policy_chosen_logps - ref_chosen_logps.detach()
+    rejected_logratios = policy_rejected_logps - ref_rejected_logps.detach()
 
     # DPO: -log(sigma(beta * (chosen_adv - rejected_adv)))
     logits = beta * (chosen_logratios - rejected_logratios)

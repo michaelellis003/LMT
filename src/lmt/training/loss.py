@@ -40,8 +40,9 @@ def calc_loss_batch(
     Args:
         input_batch_ids (torch.Tensor): The input tensor containing token IDs
             for the model. Shape: (batch_size, sequence_length).
-        target_batch_ids (torch.Tensor): The target tensor containing the
-            ground truth token IDs. Shape: (batch_size, sequence_length).
+        target_batch_ids (torch.Tensor): The target tensor. For pretraining:
+            next-token IDs with shape ``(batch_size, sequence_length)``.
+            For classification: class labels with shape ``(batch_size,)``.
         model (torch.nn.Module): The neural network model that will produce
             the logits.
         device (torch.device): The device on which to perform the calculations.

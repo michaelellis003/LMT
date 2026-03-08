@@ -23,11 +23,11 @@ def generate(
     model: nn.Module,
     idx: torch.Tensor,
     max_new_tokens: int,
-    context_size: int | torch.Tensor,
+    context_size: int,
     temperature: float = 1.0,
     top_k: int | None = None,
-    eos_id: str | None = None,
-):
+    eos_id: int | None = None,
+) -> torch.Tensor:
     """Generates a sequence of token IDs based on a prompt.
 
     This function iteratively predicts the next token in a sequence using the
@@ -41,7 +41,7 @@ def generate(
         idx (torch.Tensor): The initial sequence of token IDs, representing the
             prompt. Shape: (batch_size, sequence_length).
         max_new_tokens (int): The maximum number of new tokens to generate.
-        context_size (int | torch.Tensor): The model's context window size. The
+        context_size (int): The model's context window size. The
             input sequence will be cropped from the left to this size if it is
             too long.
         temperature (float, optional): Controls the randomness of the
@@ -52,9 +52,9 @@ def generate(
             filtered to the `k` most likely next tokens before sampling.
             This can help reduce the chance of generating low-probability
             tokens. Defaults to None.
-        eos_id (str | None, optional): The token ID that signifies the end of a
-            sequence. If this token is generated, the function will stop
-            generating new tokens. Defaults to None.
+        eos_id (int | None, optional): The token ID that signifies the end of a
+            sequence. If this token is generated across all batches, the
+            function will stop generating new tokens. Defaults to None.
 
     Returns:
         torch.Tensor: The generated sequence of token IDs, which includes the
@@ -78,7 +78,7 @@ def generate(
 
         if top_k is not None:
             top_logits, _ = torch.topk(logits, top_k)
-            min_val = top_logits[:, -1]
+            min_val = top_logits[:, -1].unsqueeze(-1)  # [batch, 1]
             logits = torch.where(
                 logits < min_val,
                 torch.tensor(float('-inf')).to(logits.device),
@@ -93,7 +93,7 @@ def generate(
             # Get the idx of the vocab entry with the highest logits value
             idx_next = torch.argmax(logits, dim=-1, keepdim=True)  # (batch, 1)
 
-        if idx_next == eos_id:
+        if eos_id is not None and (idx_next == eos_id).all():
             break
 
         # Append sampled index to the running sequence
@@ -129,9 +129,9 @@ def generate_and_print_sample(
     model.eval()
     config = getattr(model, 'config', None)
     if config is not None and hasattr(config, 'context_length'):
-        context_size = config.context_length
+        context_size: int = config.context_length
     else:
-        context_size = model.pos_embed.weight.shape[0]  # type: ignore
+        context_size = int(model.pos_embed.weight.shape[0])  # type: ignore
 
     encoded = tokenizer.encode(start_context)
     encoded = torch.tensor(encoded).unsqueeze(0).to(device)

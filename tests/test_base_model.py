@@ -106,6 +106,32 @@ class TestBaseModel:
         assert hasattr(model, 'aux_loss')
         assert model.aux_loss.item() >= 0
 
+    def test_moe_expert_w2_scaling(self) -> None:
+        """MoE expert w2 weights should use scaled residual init."""
+        import math
+
+        from lmt.models.base import BaseModel
+
+        config = self._make_config(num_layers=4)
+        block_config = BlockConfig(
+            attention='gqa',
+            ffn='moe',
+            norm='rmsnorm',
+            moe_num_experts=4,
+            moe_top_k=2,
+        )
+        model = BaseModel(config, block_config=block_config)
+
+        expected_std = 0.02 / math.sqrt(2 * config.num_layers)
+        for block in model.blocks:
+            for expert in block.ffn.experts:  # type: ignore[union-attr]
+                actual_std = expert.w2.weight.std().item()
+                # Allow some variance since these are random samples
+                assert actual_std < 0.02, (
+                    f'Expert w2 std {actual_std:.4f} not scaled '
+                    f'(expected ~{expected_std:.4f})'
+                )
+
     def test_param_count_scales_with_layers(self) -> None:
         """More layers means more parameters."""
         model_2 = self._make_model(num_layers=2)

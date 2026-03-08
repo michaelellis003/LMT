@@ -39,7 +39,7 @@ from lmt.layers.positional import RoPE
 
 rope = RoPE(
     d_model=64,           # head_dim, not full embed_dim
-    context_length=2048,
+    max_seq_len=2048,
 )
 
 # Applied inside attention, after Q/K projection:

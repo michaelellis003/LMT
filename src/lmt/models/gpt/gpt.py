@@ -8,6 +8,12 @@ Implements a decoder-only transformer inspired by GPT-2:
 
 Implemented as a thin wrapper around ``BaseModel`` with
 the appropriate ``BlockConfig`` (MHA + default FFN + LayerNorm).
+
+References:
+    Radford et al., 2018 -- "Improving Language Understanding
+    by Generative Pre-Training" (GPT-1)
+    Radford et al., 2019 -- "Language Models are Unsupervised
+    Multitask Learners" (GPT-2)
 """
 
 from lmt.layers.blocks.configurable_block import BlockConfig

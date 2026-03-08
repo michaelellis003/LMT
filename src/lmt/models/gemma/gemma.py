@@ -21,6 +21,7 @@ Implemented as a BaseModel wrapper using per-layer block configs
 to achieve the interleaved attention pattern.
 """
 
+import dataclasses
 import math
 
 import torch
@@ -61,8 +62,8 @@ class Gemma(BaseModel):
             global_every: Global attention every N layers. The
                 last layer in each group of N is global.
         """
-        config.qk_norm = True
-        config.tie_weights = True
+        # Copy to avoid mutating caller's config
+        config = dataclasses.replace(config, qk_norm=True, tie_weights=True)
 
         head_dim = config.embed_dim // config.num_heads
         rope = RoPE(

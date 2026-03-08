@@ -43,13 +43,13 @@ timeline
          : Learned positional embeddings
     2019 : GPT-2 — Scaling up
          : Pre-norm (LayerNorm before sublayer)
+    2019 : Multi-Query Attention (MQA, Shazeer)
     2020 : GPT-3 — Few-shot learning
-         : Multi-Query Attention (MQA)
-    2022 : RoPE — Rotary Position Encoding
-         : Flash Attention
-         : Grouped Query Attention (GQA)
+    2021 : RoPE — Rotary Position Encoding
+    2022 : Flash Attention
+    2023 : Grouped Query Attention (GQA)
     2023 : LLaMA — RMSNorm + SwiGLU + RoPE + GQA
-         : Mixtral — Mixture of Experts (MoE)
+    2024 : Mixtral — Mixture of Experts (MoE)
     2024 : DeepSeek-V2 — Multi-Head Latent Attention
          : Decoupled RoPE for MLA
 ```
@@ -178,11 +178,14 @@ Here's how each model in the library maps to these innovations:
 
 | Model | Norm | Attention | FFN | Position | Init |
 |-------|------|-----------|-----|----------|------|
-| [GPT](../models/gpt.md) | Post-norm LayerNorm | MHA | GELU FFN | Learned | Standard |
+| [GPT](../models/gpt.md) | Pre-norm LayerNorm | MHA | GELU FFN | Learned | Standard |
 | [LLaMA](../models/llama.md) | Pre-norm RMSNorm | GQA | SwiGLU | RoPE | Scaled residual |
+| [Mamba](../models/mamba.md) | Pre-norm RMSNorm | **SSM** (no attention) | Integrated (gating) | Implicit (recurrence) | Scaled residual |
 | [Mixtral](../models/mixtral.md) | Pre-norm RMSNorm | GQA + SWA | MoE (SwiGLU) | RoPE | Scaled residual |
 | [DeepSeek-V2](../models/deepseek.md) | Pre-norm RMSNorm | MLA | MoE (SwiGLU) | Decoupled RoPE | Scaled residual |
-| [Mamba](../models/mamba.md) | Pre-norm RMSNorm | **SSM** (no attention) | Integrated (gating) | Implicit (recurrence) | Scaled residual |
+| [Qwen3](../models/qwen3.md) | Pre-norm RMSNorm | GQA + QK-Norm | SwiGLU | RoPE | Scaled residual |
+| [Gemma](../models/gemma.md) | Pre-norm RMSNorm | Interleaved local/global | SwiGLU | RoPE | Scaled residual |
+| [Kimi](../models/kimi.md) | Pre-norm RMSNorm | MLA | MoE (SwiGLU) | Decoupled RoPE | Scaled residual |
 
 All models can be built using the [`ConfigurableBlock`](../api/layers.md)
 system, which lets you mix and match these components via string keys.
