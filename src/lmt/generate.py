@@ -26,8 +26,8 @@ def generate(
     context_size: int | torch.Tensor,
     temperature: float = 1.0,
     top_k: int | None = None,
-    eos_id: str | None = None,
-):
+    eos_id: int | None = None,
+) -> torch.Tensor:
     """Generates a sequence of token IDs based on a prompt.
 
     This function iteratively predicts the next token in a sequence using the
@@ -52,9 +52,9 @@ def generate(
             filtered to the `k` most likely next tokens before sampling.
             This can help reduce the chance of generating low-probability
             tokens. Defaults to None.
-        eos_id (str | None, optional): The token ID that signifies the end of a
-            sequence. If this token is generated, the function will stop
-            generating new tokens. Defaults to None.
+        eos_id (int | None, optional): The token ID that signifies the end of a
+            sequence. If this token is generated across all batches, the
+            function will stop generating new tokens. Defaults to None.
 
     Returns:
         torch.Tensor: The generated sequence of token IDs, which includes the
@@ -93,7 +93,7 @@ def generate(
             # Get the idx of the vocab entry with the highest logits value
             idx_next = torch.argmax(logits, dim=-1, keepdim=True)  # (batch, 1)
 
-        if idx_next == eos_id:
+        if eos_id is not None and (idx_next == eos_id).all():
             break
 
         # Append sampled index to the running sequence

@@ -12,7 +12,7 @@ class NaiveTokenizer(BaseTokenizer):
         """Initialize the tokenizer with a vocabulary."""
         super().__init__()
         self.str_to_int = vocab  # vocabulary mapping from string to token ID
-        self.int_to_str = {i: s for i, s in enumerate(vocab)}
+        self.int_to_str = {i: s for s, i in vocab.items()}
         self.unknown_str = unknown_str
         self.unknown_token = self.str_to_int.get(unknown_str, len(vocab))
 

@@ -76,7 +76,21 @@ class FutureTransformerLayer(nn.Module):
         """
         x = self.input_proj(torch.cat([hidden, prev_embed], dim=-1))
         normed = self.norm1(x)
-        x = x + self.attn(normed, normed, normed, need_weights=False)[0]
+        seq_len = normed.shape[1]
+        causal_mask = nn.Transformer.generate_square_subsequent_mask(
+            seq_len, device=normed.device
+        )
+        x = (
+            x
+            + self.attn(
+                normed,
+                normed,
+                normed,
+                attn_mask=causal_mask,
+                is_causal=True,
+                need_weights=False,
+            )[0]
+        )
         x = x + self.ffn(self.norm2(x))
         return x
 
@@ -150,11 +164,18 @@ class MultiTokenPredictionHead(nn.Module):
 
         # Heads 1..N-1: future prediction
         prev_hidden = hidden
-        for _k, layer in enumerate(self.future_layers):
+        for k, layer in enumerate(self.future_layers):
             if targets is not None:
-                # Teacher forcing: embed the target tokens as
-                # context for the next prediction head
-                prev_tokens = targets
+                # Teacher forcing: head k+1 predicts t+k+2, so it
+                # needs the embedding of the target at t+k+1 (shifted
+                # by k positions from the original targets).
+                prev_tokens = targets[:, k:]
+                # Pad to maintain sequence length
+                if prev_tokens.shape[1] < hidden.shape[1]:
+                    pad = targets[:, -1:].expand(
+                        -1, hidden.shape[1] - prev_tokens.shape[1]
+                    )
+                    prev_tokens = torch.cat([prev_tokens, pad], dim=1)
             else:
                 # Inference: use argmax of previous head
                 prev_tokens = logits_list[-1].argmax(dim=-1)

@@ -63,7 +63,7 @@ class BaseModel(nn.Module):
 
         # Normalize block_config to a list of per-layer configs
         if block_config is None:
-            block_configs = [BlockConfig()] * config.num_layers
+            block_configs = [BlockConfig() for _ in range(config.num_layers)]
         elif isinstance(block_config, list):
             if len(block_config) != config.num_layers:
                 raise ValueError(
@@ -72,7 +72,7 @@ class BaseModel(nn.Module):
                 )
             block_configs = block_config
         else:
-            block_configs = [block_config] * config.num_layers
+            block_configs = [block_config for _ in range(config.num_layers)]
 
         self.config = config
         self.tok_embed = nn.Embedding(config.vocab_size, config.embed_dim)
@@ -125,14 +125,21 @@ class BaseModel(nn.Module):
             elif isinstance(module, nn.Embedding):
                 nn.init.normal_(module.weight, mean=0.0, std=0.02)
 
-        # Scaled init for residual projections
+        # Scaled init for residual projections (both attention and FFN)
         std = 0.02 / math.sqrt(2 * num_layers)
         for block in self.blocks:
             cfg_block: ConfigurableBlock = block  # type: ignore[assignment]
+            # Scale attention output projection
             attn = cfg_block.attn
             out_proj = getattr(attn, 'out_proj', None)
             if out_proj is not None and isinstance(out_proj, nn.Linear):
                 nn.init.normal_(out_proj.weight, mean=0.0, std=std)
+            # Scale FFN output projection (w2 for SwiGLU, second linear
+            # for standard FFN)
+            ffn = cfg_block.ffn
+            ffn_out = getattr(ffn, 'w2', None)
+            if ffn_out is not None and isinstance(ffn_out, nn.Linear):
+                nn.init.normal_(ffn_out.weight, mean=0.0, std=std)
 
     def forward_hidden(self, in_idx: Tensor) -> Tensor:
         """Forward pass returning hidden states before the LM head.
