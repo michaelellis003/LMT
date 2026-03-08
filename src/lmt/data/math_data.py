@@ -34,7 +34,7 @@ class MathDataItem:
 
 
 def format_math_prompt(problem: str) -> str:
-    """Format a math problem as a prompt for the model.
+    r"""Format a math problem as a prompt for the model.
 
     Wraps the problem in an instruction format that encourages
     the model to show reasoning and provide a final answer in
