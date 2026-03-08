@@ -20,7 +20,8 @@ increase to the full context length.
 
 Reference:
     Bengio et al., 2009. "Curriculum Learning."
-    Li et al., 2022. "Stability and Scalability of Sequence Length Warmup."
+    Li et al., 2022. "The Stability-Efficiency Dilemma: Investigating
+    Sequence Length Warmup for Training GPT Models."
 """
 
 from abc import ABC, abstractmethod

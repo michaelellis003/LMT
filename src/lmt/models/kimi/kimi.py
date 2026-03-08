@@ -1,8 +1,8 @@
 r"""Kimi K2 architecture.
 
 Implements the MoE transformer from:
-    Kimi Team, Moonshot AI, 2025 -- "Kimi K2: From Exploration
-    to Mastery"
+    Kimi Team, Moonshot AI, 2025 -- "Kimi K2: Open Agentic
+    Intelligence" https://arxiv.org/abs/2507.20534
 
 Kimi K2 is architecturally a DeepSeek-V2/V3-family model:
 - **Multi-Head Latent Attention (MLA)**: compressed KV cache

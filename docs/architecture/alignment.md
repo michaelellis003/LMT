@@ -116,5 +116,5 @@ loss = grpo_loss(
 
 ## References
 
-- Rafailov et al., [*Direct Preference Optimization*](https://arxiv.org/abs/2305.18290) (2023)
+- Rafailov et al., [*Direct Preference Optimization: Your Language Model is Secretly a Reward Model*](https://arxiv.org/abs/2305.18290) (2023)
 - DeepSeek-AI, [*DeepSeek-R1: Incentivizing Reasoning Capability in LLMs via Reinforcement Learning*](https://arxiv.org/abs/2501.12948) (2025)

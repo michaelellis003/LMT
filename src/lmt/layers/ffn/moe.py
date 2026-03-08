@@ -18,6 +18,14 @@ alongside the routed experts.
 The auxiliary load balancing loss is stored as ``self.aux_loss``
 and should be added to the training loss (weighted by a small
 coefficient like 0.01).
+
+References:
+    Shazeer et al., 2017 -- "Outrageously Large Neural Networks:
+    The Sparsely-Gated Mixture-of-Experts Layer"
+    https://arxiv.org/abs/1701.06538
+    Fedus et al., 2022 -- "Switch Transformers: Scaling to Trillion
+    Parameter Models with Simple and Efficient Sparsity"
+    https://arxiv.org/abs/2101.03961
 """
 
 import torch

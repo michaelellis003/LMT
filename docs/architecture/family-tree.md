@@ -43,13 +43,13 @@ timeline
          : Learned positional embeddings
     2019 : GPT-2 — Scaling up
          : Pre-norm (LayerNorm before sublayer)
+    2019 : Multi-Query Attention (MQA, Shazeer)
     2020 : GPT-3 — Few-shot learning
-         : Multi-Query Attention (MQA)
     2021 : RoPE — Rotary Position Encoding
     2022 : Flash Attention
     2023 : Grouped Query Attention (GQA)
     2023 : LLaMA — RMSNorm + SwiGLU + RoPE + GQA
-         : Mixtral — Mixture of Experts (MoE)
+    2024 : Mixtral — Mixture of Experts (MoE)
     2024 : DeepSeek-V2 — Multi-Head Latent Attention
          : Decoupled RoPE for MLA
 ```
