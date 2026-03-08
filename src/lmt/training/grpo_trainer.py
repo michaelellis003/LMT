@@ -30,6 +30,7 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as f
 
+from lmt.training.generation import GenerationConfig, generate_responses
 from lmt.training.grpo import grpo_loss
 
 
@@ -141,12 +142,13 @@ class GRPOTrainer:
 
         return target_log_probs
 
-    @torch.no_grad()
     def _generate_responses(
         self,
         prompt: torch.Tensor,
     ) -> torch.Tensor:
         """Generate G responses for a prompt using the current policy.
+
+        Delegates to :func:`lmt.training.generation.generate_responses`.
 
         Args:
             prompt: Prompt token IDs ``[prompt_len]``.
@@ -154,43 +156,13 @@ class GRPOTrainer:
         Returns:
             Full sequences (prompt + response) ``[G, total_len]``.
         """
-        self.model.eval()
-
-        group_size = self.config.group_size
-        prompt_len = prompt.shape[0]
-        max_len = prompt_len + self.config.max_response_len
-
-        # Expand prompt to [group_size, prompt_len]
-        sequences = (
-            prompt.to(self.device).unsqueeze(0).expand(group_size, -1).clone()
+        gen_config = GenerationConfig(
+            group_size=self.config.group_size,
+            max_response_len=self.config.max_response_len,
+            temperature=self.config.temperature,
+            top_k=self.config.top_k,
         )
-
-        config = getattr(self.model, 'config', None)
-
-        for _ in range(self.config.max_response_len):
-            # Get context window
-            ctx_len = getattr(config, 'context_length', max_len)
-            inputs = sequences[:, -ctx_len:]
-
-            logits = self.model(inputs)[:, -1, :]  # [G, vocab]
-
-            # Temperature scaling
-            if self.config.temperature != 1.0:
-                logits = logits / self.config.temperature
-
-            # Top-k filtering
-            if self.config.top_k > 0:
-                top_k = min(self.config.top_k, logits.size(-1))
-                values, _ = logits.topk(top_k)
-                min_val = values[:, -1].unsqueeze(-1)
-                logits = logits.masked_fill(logits < min_val, float('-inf'))
-
-            probs = f.softmax(logits, dim=-1)
-            next_tokens = torch.multinomial(probs, num_samples=1)
-            sequences = torch.cat([sequences, next_tokens], dim=1)
-
-        self.model.train()
-        return sequences
+        return generate_responses(self.model, prompt, gen_config)
 
     def train_step(
         self,
