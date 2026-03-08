@@ -56,8 +56,9 @@ def _build_qwen3_mapping(config: ModelConfig) -> dict[str, str | None]:
     # Top-level
     mapping['model.embed_tokens.weight'] = 'tok_embed.weight'
     mapping['model.norm.weight'] = 'final_norm.weight'
-    # Qwen3 ties weights, so lm_head is not stored separately.
-    # If present in state dict, skip it.
+    # Qwen3 ties weights -- lm_head.weight is aliased to embed_tokens.
+    # If present in the checkpoint, skip it (mapped to None).
+    mapping['lm_head.weight'] = None
 
     for i in range(config.num_layers):
         hf = f'model.layers.{i}'

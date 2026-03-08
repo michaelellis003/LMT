@@ -22,8 +22,32 @@ References:
     reward for GRPO training on Qwen3-0.6B.
 """
 
+import math
 import re
 import subprocess
+import sys
+
+
+def _extract_boxed(text: str) -> str | None:
+    r"""Extract content from last \boxed{...} with nested brace matching."""
+    # Find the last occurrence of \boxed{
+    idx = text.rfind(r'\boxed{')
+    if idx == -1:
+        return None
+
+    start = idx + len(r'\boxed{')
+    depth = 1
+    i = start
+    while i < len(text) and depth > 0:
+        if text[i] == '{':
+            depth += 1
+        elif text[i] == '}':
+            depth -= 1
+        i += 1
+
+    if depth == 0:
+        return text[start : i - 1]
+    return None
 
 
 def extract_math_answer(text: str) -> str | None:
@@ -39,9 +63,10 @@ def extract_math_answer(text: str) -> str | None:
         Extracted answer string, or None if no answer found.
     """
     # Try \boxed{} first (LaTeX convention)
-    boxed = re.findall(r'\\boxed\{([^}]+)\}', text)
-    if boxed:
-        return boxed[-1].strip()
+    # Use brace-matching to handle nested braces like \boxed{\frac{1}{2}}
+    boxed = _extract_boxed(text)
+    if boxed is not None:
+        return boxed.strip()
 
     # Fall back to last number (integer or decimal)
     numbers = re.findall(r'-?\d+(?:\.\d+)?', text)
@@ -91,7 +116,7 @@ def math_reward(
     if (
         ext_num is not None
         and gt_num is not None
-        and abs(ext_num - gt_num) < 1e-6
+        and math.isclose(ext_num, gt_num, rel_tol=1e-6, abs_tol=1e-9)
     ):
         return 1.0
 
@@ -109,6 +134,13 @@ def code_reward(
     Executes code in a subprocess with the given tests. Returns
     graded reward: 0.0 for syntax/runtime errors, 0.3 for code
     that runs but fails tests, 1.0 for all tests passing.
+
+    .. warning::
+
+        This function executes arbitrary code in a subprocess with
+        no sandboxing. Only use with trusted inputs or inside an
+        isolated container. Never use with untrusted model outputs
+        in a production environment.
 
     Args:
         code: The code solution.
@@ -130,7 +162,7 @@ def code_reward(
 
     try:
         result = subprocess.run(
-            ['python', '-c', full_script],
+            [sys.executable, '-c', full_script],
             capture_output=True,
             text=True,
             timeout=timeout,

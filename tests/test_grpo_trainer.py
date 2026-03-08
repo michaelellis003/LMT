@@ -169,6 +169,45 @@ class TestGRPOTrainer:
         # Loss should be finite (no NaN from KL computation)
         assert torch.isfinite(torch.tensor(loss))
 
+    def test_loss_uses_response_tokens_only(self):
+        """GRPO loss should only use response tokens, not prompt."""
+        from lmt.training.grpo_trainer import GRPOConfig, GRPOTrainer
+
+        model = _make_tiny_model()
+        config = GRPOConfig(lr=1e-3, group_size=4, max_response_len=8)
+        trainer = GRPOTrainer(model=model, config=config)
+
+        # Generate sequences and check log-prob slicing
+        prompt = torch.randint(0, 64, (4,))
+        sequences = trainer._generate_responses(prompt)
+
+        # Full log-probs: [group, seq_len - 1]
+        logps = trainer.compute_log_probs(model, sequences)
+        assert logps.shape[1] == sequences.shape[1] - 1
+
+        # Response-only slice should start at prompt_len - 1
+        resp_start = prompt.shape[0] - 1
+        resp_logps = logps[:, resp_start:]
+        # Response log-probs should have max_response_len tokens
+        assert resp_logps.shape[1] == config.max_response_len
+
+    def test_gradient_clipping(self):
+        """Gradient clipping should be applied when configured."""
+        from lmt.training.grpo_trainer import GRPOConfig, GRPOTrainer
+
+        model = _make_tiny_model()
+        config = GRPOConfig(
+            lr=1e-3,
+            group_size=4,
+            max_response_len=8,
+            max_grad_norm=0.5,
+        )
+        trainer = GRPOTrainer(model=model, config=config)
+
+        prompt = torch.randint(0, 64, (4,))
+        loss = trainer.train_step(prompt, lambda p, r: 1.0)
+        assert torch.isfinite(torch.tensor(loss))
+
 
 class TestGRPOConfig:
     """Test the GRPO configuration dataclass."""

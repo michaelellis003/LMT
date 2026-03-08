@@ -16,6 +16,13 @@ class TestMathReward:
         assert extract_math_answer(r'\boxed{x^2 + 1}') == 'x^2 + 1'
         assert extract_math_answer(r'So \boxed{3/4}.') == '3/4'
 
+    def test_extract_nested_braces(self):
+        r"""Handle nested braces like \boxed{\frac{1}{2}}."""
+        from lmt.training.rewards import extract_math_answer
+
+        assert extract_math_answer(r'\boxed{\frac{1}{2}}') == r'\frac{1}{2}'
+        assert extract_math_answer(r'\boxed{x^{2}+1}') == 'x^{2}+1'
+
     def test_extract_final_number(self):
         r"""Extract last number when no \boxed{} is present."""
         from lmt.training.rewards import extract_math_answer

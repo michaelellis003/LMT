@@ -42,7 +42,8 @@ def compute_bpb(
         bytes_per_token: Average number of UTF-8 bytes per token.
             For byte-level tokenizers this is 1.0. For BPE tokenizers,
             compute as ``total_bytes / total_tokens`` on your corpus.
-        device: Device to run evaluation on.
+        device: Unused. Kept for API compatibility. The model's
+            current device is used automatically.
 
     Returns:
         BPB as a float. Lower is better.
@@ -55,8 +56,9 @@ def compute_bpb(
 
     was_training = model.training
     model.eval()
-    device_obj = torch.device(device)
-    model.to(device_obj)
+
+    # Infer device from model parameters instead of moving model
+    device_obj = next(model.parameters()).device
 
     # Get context length from model config
     config = getattr(model, 'config', None)

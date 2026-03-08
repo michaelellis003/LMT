@@ -50,6 +50,7 @@ class GRPOConfig:
     clip_eps: float = 0.2
     kl_coeff: float = 0.0
     lr: float = 5e-6
+    max_grad_norm: float | None = 1.0
     temperature: float = 0.7
     top_k: int = 50
     device: str = 'cpu'
@@ -125,7 +126,8 @@ class GRPOTrainer:
         targets = token_ids[:, 1:]
 
         logits = model(inputs)  # [batch, seq_len-1, vocab]
-        log_probs = f.log_softmax(logits, dim=-1)
+        # Upcast to FP32 for numerical stability (codebase convention)
+        log_probs = f.log_softmax(logits.float(), dim=-1)
 
         # Gather log-probs for actual next tokens
         target_log_probs = log_probs.gather(
@@ -154,7 +156,9 @@ class GRPOTrainer:
         max_len = prompt_len + self.config.max_response_len
 
         # Expand prompt to [group_size, prompt_len]
-        sequences = prompt.unsqueeze(0).expand(group_size, -1).clone()
+        sequences = (
+            prompt.to(self.device).unsqueeze(0).expand(group_size, -1).clone()
+        )
 
         config = getattr(self.model, 'config', None)
 
@@ -193,7 +197,7 @@ class GRPOTrainer:
         1. Generate G responses
         2. Score with reward function
         3. Compute log-probs under policy, old policy, and ref
-        4. Compute GRPO loss and update
+        4. Compute GRPO loss (response tokens only) and update
 
         Args:
             prompt: Prompt token IDs ``[prompt_len]``.
@@ -212,16 +216,25 @@ class GRPOTrainer:
         rewards = torch.tensor(
             [reward_fn(prompt, seq[prompt_len:]) for seq in sequences],
             dtype=torch.float32,
+            device=self.device,
         )
 
-        # Step 3: Compute log-probs
-        # Old log-probs (from the sampling policy, detached)
+        # Step 3: Compute log-probs over FULL sequences
         with torch.no_grad():
-            old_logps = self.compute_log_probs(self.model, sequences)
-            ref_logps = self.compute_log_probs(self.ref_model, sequences)
+            old_logps_full = self.compute_log_probs(self.model, sequences)
+            ref_logps_full = self.compute_log_probs(self.ref_model, sequences)
 
-        # Current policy log-probs (with grad)
-        policy_logps = self.compute_log_probs(self.model, sequences)
+        policy_logps_full = self.compute_log_probs(self.model, sequences)
+
+        # CRITICAL: Only use response tokens for GRPO loss.
+        # compute_log_probs returns [batch, seq_len-1], and prompt
+        # occupies positions 0..prompt_len-1 in the original sequence.
+        # After the shift in compute_log_probs, response predictions
+        # start at index (prompt_len - 1).
+        resp_start = prompt_len - 1
+        policy_logps = policy_logps_full[:, resp_start:]
+        old_logps = old_logps_full[:, resp_start:]
+        ref_logps = ref_logps_full[:, resp_start:]
 
         # Step 4: Compute GRPO loss and update
         loss = grpo_loss(
@@ -235,6 +248,11 @@ class GRPOTrainer:
 
         self.optimizer.zero_grad()
         loss.backward()
+        if self.config.max_grad_norm is not None:
+            torch.nn.utils.clip_grad_norm_(
+                self.model.parameters(),
+                self.config.max_grad_norm,
+            )
         self.optimizer.step()
 
         loss_val = loss.item()
