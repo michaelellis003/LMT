@@ -63,9 +63,7 @@ class Gemma(BaseModel):
                 last layer in each group of N is global.
         """
         # Copy to avoid mutating caller's config
-        config = dataclasses.replace(
-            config, qk_norm=True, tie_weights=True
-        )
+        config = dataclasses.replace(config, qk_norm=True, tie_weights=True)
 
         head_dim = config.embed_dim // config.num_heads
         rope = RoPE(
