@@ -23,8 +23,10 @@ Usage::
     uv run python recipes/reasoning_math.py --dry_run
 
 References:
-    Raschka, S. (2025). "Reasoning from Scratch"
-    DeepSeek-AI (2025). "DeepSeek-R1"
+    Raschka, S. (2025). "Build A Reasoning Model (From Scratch)"
+    (Manning; GitHub: rasbt/reasoning-from-scratch)
+    DeepSeek-AI (2025). "DeepSeek-R1: Incentivizing Reasoning
+    Capability in LLMs via Reinforcement Learning" (arXiv:2501.12948)
 """
 
 import argparse

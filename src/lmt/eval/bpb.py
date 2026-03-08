@@ -16,8 +16,9 @@ Lower BPB is better. For byte-level tokenizers (1 byte per token),
 :math:`2^{\text{BPB}}` equals perplexity.
 
 Reference:
-    Karpathy, A. (2025). "autoresearch" -- uses val_bpb as the
-    primary metric for automated experiment iteration.
+    Karpathy, A. (2025). "autoresearch" (GitHub: karpathy/autoresearch)
+    -- uses val_bpb as the primary metric for automated experiment
+    iteration on a single GPU.
 """
 
 import math

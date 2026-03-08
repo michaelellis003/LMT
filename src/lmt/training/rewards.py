@@ -18,7 +18,8 @@ Three reward types:
    (e.g., ``<think>`` tags for chain-of-thought).
 
 References:
-    Raschka, S. (2025). "Reasoning from Scratch" -- binary math
+    Raschka, S. (2025). "Build A Reasoning Model (From Scratch)"
+    (Manning; GitHub: rasbt/reasoning-from-scratch) -- binary math
     reward for GRPO training on Qwen3-0.6B.
 """
 

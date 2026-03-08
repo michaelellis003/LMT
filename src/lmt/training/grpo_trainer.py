@@ -8,14 +8,18 @@ Orchestrates Group Relative Policy Optimization:
 
 Follows Raschka's "reasoning-from-scratch" recipe:
 - No SFT step required (GRPO directly on base model)
-- **No KL penalty by default** (kl_coeff=0.0) -- Raschka found
-  that the KL term causes training collapse at small scale
+- **No KL penalty by default** (kl_coeff=0.0) -- when training
+  from a base model (not already reasoning-capable), KL
+  regularization is unnecessary. When fine-tuning distilled
+  models, KL can help prevent entropy collapse.
 - Group size G=8 is sufficient
 - 50 training steps can show significant improvement
 
 References:
-    DeepSeek-AI (2025). "DeepSeek-R1"
-    Raschka, S. (2025). "Reasoning from Scratch"
+    DeepSeek-AI (2025). "DeepSeek-R1: Incentivizing Reasoning
+    Capability in LLMs via Reinforcement Learning" (arXiv:2501.12948)
+    Raschka, S. (2025). "Build A Reasoning Model (From Scratch)"
+    (Manning; GitHub: rasbt/reasoning-from-scratch)
 """
 
 import copy
@@ -38,7 +42,8 @@ class GRPOConfig:
         max_response_len: Maximum tokens to generate per response.
         clip_eps: PPO clipping epsilon.
         kl_coeff: KL penalty coefficient. Default 0.0 (disabled)
-            following Raschka's finding that KL hurts at small scale.
+            for base model training. Set >0 when fine-tuning
+            already-capable models to prevent entropy collapse.
         lr: Learning rate.
         temperature: Sampling temperature for response generation.
         top_k: Top-k filtering for sampling. 0 = disabled.
