@@ -59,10 +59,7 @@ class ExperimentRunConfig:
     @classmethod
     def from_dict(cls, d: dict) -> 'ExperimentRunConfig':
         """Deserialize from dict, ignoring unknown keys."""
-        valid_keys = {
-            field_name
-            for field_name in cls.__dataclass_fields__
-        }
+        valid_keys = {field_name for field_name in cls.__dataclass_fields__}
         filtered = {k: v for k, v in d.items() if k in valid_keys}
         return cls(**filtered)
 
@@ -253,9 +250,7 @@ class ExperimentRunner:
         exp_dir.mkdir(parents=True, exist_ok=True)
 
         result_path = exp_dir / 'result.json'
-        result_path.write_text(
-            json.dumps(result.to_dict(), indent=2) + '\n'
-        )
+        result_path.write_text(json.dumps(result.to_dict(), indent=2) + '\n')
 
         if config.save_checkpoint:
             ckpt_path = exp_dir / 'checkpoint.pt'
