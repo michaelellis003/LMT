@@ -139,9 +139,9 @@ class BaseModel(nn.Module):
             ffn = cfg_block.ffn
             if isinstance(ffn, MoEFeedForward):
                 for expert in ffn.experts:
-                    nn.init.normal_(expert.w2.weight, mean=0.0, std=std)
+                    nn.init.normal_(expert.w2.weight, mean=0.0, std=std)  # type: ignore[union-attr]
                 for expert in ffn.shared_experts:
-                    nn.init.normal_(expert.w2.weight, mean=0.0, std=std)
+                    nn.init.normal_(expert.w2.weight, mean=0.0, std=std)  # type: ignore[union-attr]
             else:
                 ffn_out = getattr(ffn, 'w2', None)
                 if ffn_out is not None and isinstance(ffn_out, nn.Linear):

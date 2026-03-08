@@ -129,9 +129,9 @@ def generate_and_print_sample(
     model.eval()
     config = getattr(model, 'config', None)
     if config is not None and hasattr(config, 'context_length'):
-        context_size = config.context_length
+        context_size: int = config.context_length
     else:
-        context_size = model.pos_embed.weight.shape[0]  # type: ignore
+        context_size = int(model.pos_embed.weight.shape[0])  # type: ignore
 
     encoded = tokenizer.encode(start_context)
     encoded = torch.tensor(encoded).unsqueeze(0).to(device)

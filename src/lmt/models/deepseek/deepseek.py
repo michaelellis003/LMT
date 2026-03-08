@@ -199,9 +199,9 @@ class DeepSeekV2(nn.Module):
             ffn = block.ffn
             if isinstance(ffn, MoEFeedForward):
                 for expert in ffn.experts:
-                    nn.init.normal_(expert.w2.weight, mean=0.0, std=std)
+                    nn.init.normal_(expert.w2.weight, mean=0.0, std=std)  # type: ignore[union-attr]
                 for expert in ffn.shared_experts:
-                    nn.init.normal_(expert.w2.weight, mean=0.0, std=std)
+                    nn.init.normal_(expert.w2.weight, mean=0.0, std=std)  # type: ignore[union-attr]
             elif isinstance(ffn, SwiGLU):
                 nn.init.normal_(ffn.w2.weight, mean=0.0, std=std)
 
