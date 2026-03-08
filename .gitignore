@@ -17,8 +17,8 @@ wheels/
 scripts/models/*
 *.pth
 
-# Data files
-data/
+# Data files (raw datasets, not source code)
+/data/
 
 # Documentation build output
 site/
