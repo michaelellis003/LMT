@@ -161,6 +161,11 @@ class GroupedQueryAttention(nn.Module):
 
         # Apply RoPE to Q and K if configured
         if self.rope is not None:
+            # Use cache offset so tokens get correct positions
+            # during autoregressive generation
+            rope_offset = (
+                self.kv_cache.seq_len if self.kv_cache is not None else 0
+            )
             # RoPE expects [batch, seq, dim], so reshape per-head
             q = q.permute(0, 2, 1, 3).reshape(
                 b * self.num_heads, seq_len, self.head_dim
@@ -168,7 +173,7 @@ class GroupedQueryAttention(nn.Module):
             k = k.permute(0, 2, 1, 3).reshape(
                 b * self.num_kv_heads, seq_len, self.head_dim
             )
-            q, k = self.rope.apply_rotary_emb(q, k)
+            q, k = self.rope.apply_rotary_emb(q, k, offset=rope_offset)
             q = q.view(b, self.num_heads, seq_len, self.head_dim)
             k = k.view(b, self.num_kv_heads, seq_len, self.head_dim)
             v = v.permute(0, 2, 1, 3)

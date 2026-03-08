@@ -78,7 +78,7 @@ def generate(
 
         if top_k is not None:
             top_logits, _ = torch.topk(logits, top_k)
-            min_val = top_logits[:, -1]
+            min_val = top_logits[:, -1].unsqueeze(-1)  # [batch, 1]
             logits = torch.where(
                 logits < min_val,
                 torch.tensor(float('-inf')).to(logits.device),

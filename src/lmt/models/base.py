@@ -166,7 +166,10 @@ class BaseModel(nn.Module):
         if self._has_moe:
             total_aux = torch.tensor(0.0, device=x.device)
             for block in self.blocks:
-                x = block(x)
+                if self.gradient_checkpointing and self.training:
+                    x = grad_checkpoint(block, x, use_reentrant=False)
+                else:
+                    x = block(x)
                 cfg_block: ConfigurableBlock = block  # type: ignore[assignment]
                 if isinstance(cfg_block.ffn, MoEFeedForward):
                     total_aux = total_aux + cfg_block.ffn.aux_loss

@@ -189,11 +189,17 @@ class DeepSeekV2(nn.Module):
             elif isinstance(module, nn.Embedding):
                 nn.init.normal_(module.weight, mean=0.0, std=0.02)
 
-        # Scaled residual init for attention output projections
+        # Scaled residual init for residual projections
         std = 0.02 / math.sqrt(2 * num_layers)
         for module in self.blocks:
             block: DeepSeekBlock = module  # type: ignore[assignment]
+            # Scale attention output projection
             nn.init.normal_(block.attn.out_proj.weight, mean=0.0, std=std)
+            # Scale FFN output projection (w2 for SwiGLU / each expert)
+            ffn = block.ffn
+            ffn_out = getattr(ffn, 'w2', None)
+            if ffn_out is not None and isinstance(ffn_out, nn.Linear):
+                nn.init.normal_(ffn_out.weight, mean=0.0, std=std)
 
     def forward(self, in_idx: Tensor) -> Tensor:
         """Forward pass of DeepSeek-V2.
