@@ -79,7 +79,9 @@ class TokenDataset(Dataset):
 
         Args:
             tokens: 1D tensor of token IDs.
-            context_length: Sequence length for each sample.
+            context_length: Number of input tokens per sample.
+                Each returned item has ``context_length + 1`` tokens
+                (the extra token is the final prediction target).
         """
         self.tokens = tokens
         self.context_length = context_length

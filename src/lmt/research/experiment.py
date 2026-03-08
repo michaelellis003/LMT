@@ -39,7 +39,8 @@ class ExperimentRunConfig:
     Attributes:
         name: Unique experiment name (used for output directory).
         train_steps: Number of training steps.
-        eval_interval: Evaluate every N steps.
+        eval_interval: Evaluate on full training data every N steps.
+            If larger than ``train_steps``, no evaluation occurs.
         lr: Learning rate.
         batch_size: Training batch size.
         save_checkpoint: Whether to save model checkpoint.
