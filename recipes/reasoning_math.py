@@ -28,6 +28,7 @@ References:
 """
 
 import argparse
+import collections.abc
 import json
 from pathlib import Path
 
@@ -71,7 +72,7 @@ def create_math_prompts() -> list[MathDataItem]:
 
 def make_reward_fn(
     ground_truth: str,
-) -> callable:
+) -> collections.abc.Callable[[torch.Tensor, torch.Tensor], float]:
     """Create a reward function for a specific math problem.
 
     Args:
