@@ -165,7 +165,11 @@ class GRPOTrainer:
             temperature=self.config.temperature,
             top_k=self.config.top_k,
         )
-        return generate_responses(self.model, prompt, gen_config)
+        # Use KV cache if model supports it (BaseModel does)
+        has_cache = hasattr(self.model, 'enable_kv_cache')
+        return generate_responses(
+            self.model, prompt, gen_config, use_kv_cache=has_cache
+        )
 
     def train_step(
         self,
