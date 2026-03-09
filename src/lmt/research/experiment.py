@@ -194,6 +194,7 @@ class ExperimentRunner:
         model: nn.Module,
         train_data: torch.Tensor,
         config: ExperimentRunConfig,
+        optimizer: torch.optim.Optimizer | None = None,
     ) -> ExperimentResult:
         """Run a single training experiment.
 
@@ -204,12 +205,15 @@ class ExperimentRunner:
             model: Model to train (must accept token IDs, return logits).
             train_data: Token IDs ``[num_samples, seq_len]``.
             config: Experiment configuration.
+            optimizer: Optional optimizer. Defaults to AdamW if not
+                provided.
 
         Returns:
             ExperimentResult with metrics and final loss.
         """
         tracker = MetricTracker()
-        optimizer = torch.optim.AdamW(model.parameters(), lr=config.lr)
+        if optimizer is None:
+            optimizer = torch.optim.AdamW(model.parameters(), lr=config.lr)
 
         # Infer device from model parameters
         model_device = next(model.parameters()).device
