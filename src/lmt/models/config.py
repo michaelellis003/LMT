@@ -53,6 +53,7 @@ class ModelConfig:
     tie_weights: bool = False  # Tie input/output embedding weights
     qk_norm: bool = False  # Apply RMSNorm to Q and K before dot product
     value_residual_mix: float = 0.0  # Blend first layer's V into later layers
+    head_dim: int | None = None  # None = embed_dim // num_heads
 
 
 class ModelConfigPresets:

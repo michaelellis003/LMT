@@ -79,16 +79,19 @@ class GroupedQueryAttention(nn.Module):
         if num_kv_heads is None:
             num_kv_heads = num_heads
 
-        assert embed_dim % num_heads == 0, (
-            'embed_dim must be divisible by num_heads'
-        )
+        head_dim = getattr(model_config, 'head_dim', None)
+        if head_dim is None:
+            assert embed_dim % num_heads == 0, (
+                'embed_dim must be divisible by num_heads'
+            )
+            head_dim = embed_dim // num_heads
         assert num_heads % num_kv_heads == 0, (
             'num_heads must be divisible by num_kv_heads'
         )
 
         self.num_heads = num_heads
         self.num_kv_heads = num_kv_heads
-        self.head_dim = embed_dim // num_heads
+        self.head_dim = head_dim
         self.num_groups = num_heads // num_kv_heads
         self.rope = rope
 
@@ -103,7 +106,9 @@ class GroupedQueryAttention(nn.Module):
         self.v_proj = nn.Linear(
             embed_dim, num_kv_heads * self.head_dim, bias=bias
         )
-        self.out_proj = nn.Linear(embed_dim, embed_dim, bias=False)
+        self.out_proj = nn.Linear(
+            num_heads * self.head_dim, embed_dim, bias=False
+        )
 
         # QK-Norm: normalize Q and K before dot product (Qwen3, Gemma 3)
         self.qk_norm = getattr(model_config, 'qk_norm', False)
