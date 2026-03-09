@@ -232,7 +232,9 @@ def evaluate_problem(
             consensus_code, test_code, timeout=5
         )
 
-    # 5. CodeT scoring (use extracted assertions as gen tests)
+    # 5. CodeT scoring (use ground-truth assertions as proxy for
+    #    generated tests — this is an upper bound on CodeT since real
+    #    generated tests would be noisier)
     codet_tests = _extract_assertions(tests, entry_point)
     if codet_tests and len(sample_codes) >= 2:
         codet_result = codet_score(sample_codes, codet_tests, timeout=5)
