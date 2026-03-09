@@ -77,7 +77,17 @@ class ExperimentSamples:
 
 @dataclass
 class BayesianComparison:
-    """Result of a Bayesian comparison between two experiments.
+    r"""Result of a Bayesian comparison between two experiments.
+
+    Following Kruschke (2013) and Benavoli et al. (2017), the result
+    includes three probabilities that partition the outcome space:
+
+    - P(A better): difference < -ROPE
+    - P(equivalent): difference in [-ROPE, +ROPE]
+    - P(B better): difference > +ROPE
+
+    When rope=0 (default), prob_rope=0 and the three-way split
+    degenerates to the two-way P(A<B) vs P(B<A).
 
     Attributes:
         name_a: Name of first experiment.
@@ -86,8 +96,13 @@ class BayesianComparison:
         mean_b: Mean of second experiment.
         mean_difference: Mean of (A - B). Negative means A is better
             (lower BPB).
-        prob_a_better: P(mu_A < mu_B) -- probability that A has lower
-            BPB than B.
+        prob_a_better: P(mu_A < mu_B - rope) -- probability that A is
+            meaningfully better than B.
+        prob_b_better: P(mu_B < mu_A - rope) -- probability that B is
+            meaningfully better than A.
+        prob_rope: P(|mu_A - mu_B| <= rope) -- probability that A and
+            B are practically equivalent.
+        rope: Region of practical equivalence half-width.
         ci_lower: Lower bound of 95% credible interval for (A - B).
         ci_upper: Upper bound of 95% credible interval for (A - B).
         cohens_d: Cohen's d effect size (positive = A is better).
@@ -101,6 +116,9 @@ class BayesianComparison:
     mean_b: float
     mean_difference: float
     prob_a_better: float
+    prob_b_better: float
+    prob_rope: float
+    rope: float
     ci_lower: float
     ci_upper: float
     cohens_d: float
@@ -217,16 +235,26 @@ def bayesian_compare(
     a: ExperimentSamples,
     b: ExperimentSamples,
     n_mc_samples: int = 50000,
+    rope: float = 0.0,
 ) -> BayesianComparison:
     """Compare two experiments using Bayesian posterior sampling.
 
     Samples from the posterior t-distributions for each group's mean,
-    then computes P(mu_A < mu_B) by Monte Carlo.
+    then computes a three-way probability split following Benavoli et
+    al. (2017) and Kruschke (2013):
+
+    - P(A better): diff < -rope (A has meaningfully lower BPB)
+    - P(equivalent): |diff| <= rope (practically no difference)
+    - P(B better): diff > +rope (B has meaningfully lower BPB)
+
+    When rope=0 (default), this reduces to P(A<B) vs P(B<A).
 
     Args:
         a: Samples from experiment A.
         b: Samples from experiment B.
         n_mc_samples: Number of Monte Carlo samples.
+        rope: Region of practical equivalence half-width. For BPB,
+            0.01 means differences < 0.01 are "practically equivalent."
 
     Returns:
         BayesianComparison with posterior probabilities and intervals.
@@ -240,18 +268,24 @@ def bayesian_compare(
 
     # Compute difference distribution: A - B
     diffs = [sa - sb for sa, sb in zip(samples_a, samples_b, strict=True)]
+    n_diffs = len(diffs)
 
-    # P(A < B) = P(diff < 0)
-    prob_a_better = sum(1 for d in diffs if d < 0) / len(diffs)
+    # Three-way probability split (Benavoli et al. 2017)
+    # diff < -rope: A is meaningfully better (lower BPB)
+    # |diff| <= rope: practically equivalent
+    # diff > +rope: B is meaningfully better
+    prob_a_better = sum(1 for d in diffs if d < -rope) / n_diffs
+    prob_b_better = sum(1 for d in diffs if d > rope) / n_diffs
+    prob_rope = sum(1 for d in diffs if -rope <= d <= rope) / n_diffs
 
     # Credible interval for the difference
     diffs.sort()
-    lo_idx = int(0.025 * len(diffs))
-    hi_idx = int(0.975 * len(diffs))
+    lo_idx = int(0.025 * n_diffs)
+    hi_idx = int(0.975 * n_diffs)
     ci_lower = diffs[lo_idx]
     ci_upper = diffs[hi_idx]
 
-    mean_diff = sum(diffs) / len(diffs)
+    mean_diff = sum(diffs) / n_diffs
 
     return BayesianComparison(
         name_a=a.name,
@@ -260,6 +294,9 @@ def bayesian_compare(
         mean_b=b.mean,
         mean_difference=mean_diff,
         prob_a_better=prob_a_better,
+        prob_b_better=prob_b_better,
+        prob_rope=prob_rope,
+        rope=rope,
         ci_lower=ci_lower,
         ci_upper=ci_upper,
         cohens_d=cohens_d(a.values, b.values),
@@ -334,13 +371,19 @@ def _posterior_samples(
 
 
 def _interpret(result: BayesianComparison) -> str:
-    """Generate human-readable interpretation of comparison."""
-    p = result.prob_a_better
+    """Generate human-readable interpretation of comparison.
+
+    Uses the three-way probability split (Benavoli et al. 2017):
+    P(A better), P(equivalent), P(B better).
+    """
+    p_a = result.prob_a_better
+    p_r = result.prob_rope
+    p_b = result.prob_b_better
     d = abs(result.cohens_d)
     a = result.name_a
     b = result.name_b
 
-    # Effect size interpretation
+    # Effect size interpretation (Cohen 1988)
     if d < 0.2:
         size_str = 'negligible'
     elif d < 0.5:
@@ -350,31 +393,27 @@ def _interpret(result: BayesianComparison) -> str:
     else:
         size_str = 'large'
 
-    # Probability interpretation
-    if p > 0.95:
-        confidence = 'strong evidence'
-        winner = a
-    elif p > 0.8:
-        confidence = 'moderate evidence'
-        winner = a
-    elif p < 0.05:
-        confidence = 'strong evidence'
-        winner = b
-    elif p < 0.2:
-        confidence = 'moderate evidence'
-        winner = b
-    else:
-        return (
-            f'No clear winner ({a} vs {b}). '
-            f'P({a} better) = {p:.2f}, '
-            f'effect size: {size_str} (d={result.cohens_d:.2f}). '
-            f'Need more seeds to distinguish.'
-        )
-
-    return (
-        f'{confidence} that {winner} is better. '
-        f'P({a} better) = {p:.2f}, '
+    # Base stats string
+    stats = (
+        f'P({a} better) = {p_a:.2f}, '
+        f'P(equiv) = {p_r:.2f}, '
+        f'P({b} better) = {p_b:.2f}, '
         f'effect size: {size_str} (d={result.cohens_d:.2f}). '
         f'Mean diff: {result.mean_difference:.4f} '
         f'[{result.ci_lower:.4f}, {result.ci_upper:.4f}].'
     )
+
+    # ROPE-aware interpretation
+    if p_r > 0.5:
+        return f'Practically equivalent ({a} vs {b}). {stats}'
+
+    if p_a > 0.95:
+        return f'Strong evidence that {a} is better. {stats}'
+    if p_a > 0.8:
+        return f'Moderate evidence that {a} is better. {stats}'
+    if p_b > 0.95:
+        return f'Strong evidence that {b} is better. {stats}'
+    if p_b > 0.8:
+        return f'Moderate evidence that {b} is better. {stats}'
+
+    return f'No clear winner ({a} vs {b}). {stats}'

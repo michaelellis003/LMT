@@ -133,6 +133,39 @@ class TestBayesianCompare:
         result = bayesian_compare(a, b)
         assert result.cohens_d != 0.0
 
+    def test_three_way_probabilities_sum_to_one(self):
+        """P(A better) + P(equiv) + P(B better) should equal 1."""
+        a = ExperimentSamples(name='a', values=[3.0, 3.1, 3.2])
+        b = ExperimentSamples(name='b', values=[3.5, 3.6, 3.7])
+        result = bayesian_compare(a, b, rope=0.01)
+        total = result.prob_a_better + result.prob_rope + result.prob_b_better
+        assert total == pytest.approx(1.0, abs=1e-6)
+
+    def test_rope_zero_degenerates_to_two_way(self):
+        """With rope=0, prob_rope should be 0 and probs sum to 1."""
+        a = ExperimentSamples(name='a', values=[3.0, 3.1, 3.2])
+        b = ExperimentSamples(name='b', values=[3.5, 3.6, 3.7])
+        result = bayesian_compare(a, b, rope=0.0)
+        assert result.prob_rope == pytest.approx(0.0, abs=1e-6)
+        assert result.prob_a_better + result.prob_b_better == pytest.approx(
+            1.0, abs=1e-6
+        )
+
+    def test_large_rope_gives_high_equiv_prob(self):
+        """Very large ROPE should make most differences 'equivalent'."""
+        a = ExperimentSamples(name='a', values=[3.0, 3.1, 3.2])
+        b = ExperimentSamples(name='b', values=[3.5, 3.6, 3.7])
+        result = bayesian_compare(a, b, rope=10.0)  # Huge ROPE
+        assert result.prob_rope > 0.99
+
+    def test_rope_with_clear_difference(self):
+        """Small ROPE with big difference should still detect winner."""
+        a = ExperimentSamples(name='a', values=[3.0, 3.1, 3.05, 3.08, 3.02])
+        b = ExperimentSamples(name='b', values=[3.5, 3.6, 3.55, 3.58, 3.52])
+        result = bayesian_compare(a, b, rope=0.01)
+        assert result.prob_a_better > 0.9
+        assert result.prob_rope < 0.05
+
 
 class TestMultiSeedSummary:
     """Test multi-seed summary generation."""
