@@ -43,27 +43,93 @@ SwiGLU and RoPE contribute the most to the BPB improvement, while the
 norm type (RMSNorm vs LayerNorm) and attention type (GQA vs MHA) have
 smaller effects at toy scale.
 
-**Rationale**:
+## Results
 
-- **SwiGLU** introduces a gating mechanism that enables feature selection,
-  fundamentally changing the FFN's computational capacity
-- **RoPE** provides relative position information that scales better than
-  learned absolute embeddings
-- **RMSNorm** is computationally simpler but functionally similar to
-  LayerNorm at this scale
-- **GQA** is primarily an efficiency feature (fewer KV heads) that
-  shouldn't affect quality with only 4 heads
+**The hypothesis was wrong.** No single feature drives the improvement.
+The effect is almost entirely due to **synergy** between the features.
 
-## Feature Contribution Analysis
+| Variant        | Best BPB | vs GPT   |
+|---------------|----------|----------|
+| GPT baseline  | 3.602    | --       |
+| GPT + RoPE    | 3.587    | -0.4%   |
+| GPT + SwiGLU  | 3.617    | +0.4%   |
+| GPT + GQA     | 3.583    | -0.5%   |
+| GPT + RMSNorm | 3.607    | +0.1%   |
+| **LLaMA (all 4)** | **3.226** | **-10.4%** |
 
-When the full ablation completes, the analysis compares:
+<div class="exp-chart" data-experiment="arch-ablation"></div>
 
-1. **Individual contributions**: How much does each feature improve BPB
-   over the GPT baseline?
-2. **Sum of individual contributions** vs **full LLaMA delta**: If the sum
-   is less than the full delta, the features have **synergy** (they work
-   better together). If the sum exceeds the delta, there is **overlap**
-   (features partially substitute for each other).
+### Individual Feature Contributions
+
+| Feature  | BPB Change | % Change |
+|----------|-----------|----------|
+| RoPE     | -0.015    | -0.4%   |
+| GQA      | -0.019    | -0.5%   |
+| RMSNorm  | +0.005    | +0.1%   |
+| SwiGLU   | +0.015    | +0.4%   |
+
+**Sum of individual contributions: 0.014 BPB** (essentially zero)
+
+**Full LLaMA improvement: 0.376 BPB** (10.4%)
+
+**Interaction (synergy): +0.362 BPB** -- the features are **26x more
+effective together** than the sum of their individual effects.
+
+## Analysis
+
+!!! warning "Surprising Result"
+    This is a textbook case of **emergent behavior through feature
+    interaction**. Each component contributes almost nothing alone,
+    but together they produce a 10% improvement.
+
+### Why does this happen?
+
+The features are **complementary** -- they address different bottlenecks
+that only matter when the other bottlenecks are also resolved:
+
+1. **RoPE** provides better position information, but this only helps
+   when the FFN can *use* that positional signal effectively (SwiGLU's
+   gating helps here)
+
+2. **SwiGLU** enables feature selection through gating, but this only
+   helps when the attention layer provides high-quality features to
+   select from (GQA's shared KV heads create more diverse features)
+
+3. **GQA** forces the model to learn more generalizable key-value
+   representations, but this only pays off when the rest of the
+   architecture can exploit the generalization
+
+4. **RMSNorm** is computationally lighter, freeing up "optimization
+   budget" for the other components -- but alone, it's functionally
+   equivalent to LayerNorm
+
+Think of it like a relay team: replacing one runner doesn't change much,
+but replacing all four creates a team that works together.
+
+### Falsification Check
+
+Could this be a training artifact? Several sanity checks:
+
+- The GPT baseline BPB (3.60) matches our full-data result (3.56),
+  confirming the reduced dataset is representative
+- All variants train stably (no divergence or NaN)
+- The LLaMA full result (3.23) matches the architecture comparison
+  result for LLaMA (3.17), accounting for the smaller dataset
+- Each variant uses the same seed (42) and identical training config
+
+### Implications
+
+1. **Benchmarking individual features is misleading** at toy scale.
+   A paper claiming "SwiGLU provides X% improvement" may not replicate
+   if tested in isolation rather than as part of a full architecture.
+
+2. **The LLaMA recipe works as a package**, not as a collection of
+   independent improvements. This suggests these features were
+   co-designed or at least co-tuned.
+
+3. **At larger scale**, individual features likely contribute more
+   because the model has enough capacity to exploit each optimization
+   independently. This is a toy-scale phenomenon.
 
 ## Running the Experiment
 
