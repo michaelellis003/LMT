@@ -11,6 +11,7 @@ Key strategies:
 - **Consensus voting**: Cluster by functional equivalence, pick the
   largest cluster.
 - **Self-repair**: On failure, retry with structured error feedback.
+- **CodeT**: Score by agreement between code and generated tests.
 """
 
 from lmt.inference.best_of_n import (
@@ -18,6 +19,10 @@ from lmt.inference.best_of_n import (
     BestOfNResult,
     best_of_n,
     best_of_n_select,
+)
+from lmt.inference.codet import (
+    CodeTResult,
+    codet_score,
 )
 from lmt.inference.consensus import (
     ConsensusResult,
@@ -33,6 +38,7 @@ from lmt.inference.self_repair import (
 __all__ = [
     'BestOfNConfig',
     'BestOfNResult',
+    'CodeTResult',
     'ConsensusResult',
     'RepairConfig',
     'RepairResult',
@@ -40,5 +46,6 @@ __all__ = [
     'best_of_n_select',
     'build_error_prompt',
     'cluster_by_output',
+    'codet_score',
     'self_repair',
 ]

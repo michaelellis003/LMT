@@ -30,5 +30,8 @@ site/
 # MLflow runs
 runs/
 
+# Experiment results (generated data)
+experiments/results/
+
 # Claude Code
 .claude/
