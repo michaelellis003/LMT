@@ -6,6 +6,7 @@ from lmt.data.hf_datasets import (
     download_gsm8k,
     download_humaneval,
     download_math,
+    download_wikitext2,
 )
 from lmt.data.math_data import MathDataItem
 
@@ -126,3 +127,78 @@ class TestDownloadHumanEval:
         assert len(items) == 1
         assert isinstance(items[0], CodeDataItem)
         assert items[0].entry_point == 'add'
+
+
+class TestDownloadWikitext2:
+    """Test WikiText-2 dataset download."""
+
+    @pytest.mark.slow
+    def test_download_wikitext2_train(self):
+        """Should download WikiText-2 train split as text."""
+        datasets = pytest.importorskip('datasets')
+        try:
+            texts = download_wikitext2(split='train', max_items=10)
+        except (
+            datasets.exceptions.DatasetNotFoundError,
+            ConnectionError,
+            OSError,
+        ):
+            pytest.skip('WikiText-2 dataset not accessible')
+        assert len(texts) == 10
+        assert all(isinstance(t, str) for t in texts)
+        assert all(len(t) > 0 for t in texts)
+
+    @pytest.mark.slow
+    def test_download_wikitext2_validation(self):
+        """Should download WikiText-2 validation split."""
+        datasets = pytest.importorskip('datasets')
+        try:
+            texts = download_wikitext2(split='validation', max_items=5)
+        except (
+            datasets.exceptions.DatasetNotFoundError,
+            ConnectionError,
+            OSError,
+        ):
+            pytest.skip('WikiText-2 dataset not accessible')
+        assert len(texts) <= 5
+        assert all(isinstance(t, str) for t in texts)
+
+    def test_download_wikitext2_mock(self):
+        """Should work with mock data (no network)."""
+        mock_rows = [
+            {'text': 'The quick brown fox jumps.'},
+            {'text': ''},
+            {'text': 'Another paragraph here.'},
+            {'text': ''},
+            {'text': ' = Section Title = '},
+        ]
+        texts = download_wikitext2(rows=mock_rows)
+        # Should filter out empty lines
+        assert len(texts) == 3
+        assert texts[0] == 'The quick brown fox jumps.'
+        assert texts[1] == 'Another paragraph here.'
+        assert texts[2] == ' = Section Title = '
+
+    def test_download_wikitext2_mock_no_filter(self):
+        """Should keep empty lines when filter_empty=False."""
+        mock_rows = [
+            {'text': 'Hello'},
+            {'text': ''},
+            {'text': 'World'},
+        ]
+        texts = download_wikitext2(rows=mock_rows, filter_empty=False)
+        assert len(texts) == 3
+
+    def test_download_wikitext2_max_items(self):
+        """Should respect max_items after filtering."""
+        mock_rows = [
+            {'text': 'A'},
+            {'text': ''},
+            {'text': 'B'},
+            {'text': ''},
+            {'text': 'C'},
+            {'text': 'D'},
+        ]
+        texts = download_wikitext2(rows=mock_rows, max_items=2)
+        assert len(texts) == 2
+        assert texts == ['A', 'B']
