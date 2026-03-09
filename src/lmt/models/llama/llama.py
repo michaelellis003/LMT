@@ -35,7 +35,7 @@ class LLaMA(BaseModel):
             config: Model configuration with embed_dim, num_heads,
                 num_kv_heads, context_length, vocab_size, num_layers.
         """
-        head_dim = config.embed_dim // config.num_heads
+        head_dim = config.head_dim or config.embed_dim // config.num_heads
         rope = RoPE(
             d_model=head_dim,
             max_seq_len=config.context_length,
