@@ -24,6 +24,7 @@ Usage::
 """
 
 import json
+import math
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -195,11 +196,15 @@ class ExperimentRunner:
         train_data: torch.Tensor,
         config: ExperimentRunConfig,
         optimizer: torch.optim.Optimizer | None = None,
+        val_data: torch.Tensor | None = None,
     ) -> ExperimentResult:
         """Run a single training experiment.
 
         Trains the model on ``train_data`` for ``config.train_steps``
         steps, logging loss at each step and saving results.
+
+        If ``val_data`` is provided, computes BPB on the validation
+        set at each eval interval — the key metric for autoresearch.
 
         Args:
             model: Model to train (must accept token IDs, return logits).
@@ -207,6 +212,8 @@ class ExperimentRunner:
             config: Experiment configuration.
             optimizer: Optional optimizer. Defaults to AdamW if not
                 provided.
+            val_data: Optional validation token IDs for BPB
+                computation ``[num_samples, seq_len]``.
 
         Returns:
             ExperimentResult with metrics and final loss.
@@ -263,6 +270,14 @@ class ExperimentRunner:
                         eval_count += eb[:, 1:].numel()
                 avg_eval = eval_total / max(eval_count, 1)
                 tracker.log('eval_loss', avg_eval, step=step)
+
+                # Compute val_bpb if validation data provided
+                if val_data is not None:
+                    val_bpb = self._compute_bpb(
+                        model, val_data, model_device, config.batch_size
+                    )
+                    tracker.log('val_bpb', val_bpb, step=step)
+
                 model.train()
 
         # Final loss
@@ -287,3 +302,79 @@ class ExperimentRunner:
             torch.save(model.state_dict(), ckpt_path)
 
         return result
+
+    def best_result(
+        self,
+        metric: str = 'val_bpb',
+        higher_is_better: bool = False,
+    ) -> ExperimentResult | None:
+        """Find the experiment with the best metric value.
+
+        Args:
+            metric: Metric name to compare (default ``'val_bpb'``).
+            higher_is_better: If True, pick highest value.
+
+        Returns:
+            Best ExperimentResult, or None if no results exist.
+        """
+        if not self.results:
+            return None
+
+        best: ExperimentResult | None = None
+        best_val: float | None = None
+
+        for result in self.results:
+            val = result.metrics.get_best(metric, higher_is_better)
+            if val is None:
+                continue
+            if best_val is None or (
+                (val > best_val) if higher_is_better else (val < best_val)
+            ):
+                best_val = val
+                best = result
+
+        return best
+
+    @staticmethod
+    def _compute_bpb(
+        model: nn.Module,
+        data: torch.Tensor,
+        device: torch.device,
+        batch_size: int,
+    ) -> float:
+        """Compute BPB on token sequences.
+
+        Uses a simple bytes_per_token estimate of 1.0 (conservative).
+        For real experiments, use the proper BPB module with accurate
+        bytes_per_token computed from your tokenizer.
+
+        Args:
+            model: The language model.
+            data: Token sequences ``[num_samples, seq_len]``.
+            device: Device to run on.
+            batch_size: Batch size for evaluation.
+
+        Returns:
+            BPB as a float. Lower is better.
+        """
+        total_nll = 0.0
+        total_tokens = 0
+
+        with torch.no_grad():
+            for i in range(0, data.shape[0], batch_size):
+                batch = data[i : i + batch_size].to(device)
+                inputs = batch[:, :-1]
+                targets = batch[:, 1:]
+                logits = model(inputs)
+                loss = f.cross_entropy(
+                    logits.reshape(-1, logits.size(-1)),
+                    targets.reshape(-1),
+                    reduction='sum',
+                )
+                total_nll += loss.item()
+                total_tokens += targets.numel()
+
+        # BPB = total_nats / (ln(2) * total_bytes)
+        # With bytes_per_token=1.0 (conservative estimate)
+        total_bytes = float(total_tokens)
+        return total_nll / (math.log(2) * total_bytes)
