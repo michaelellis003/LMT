@@ -58,6 +58,18 @@
         { label: 'GPT', value: 3.556 },
       ],
     },
+    'arch-ablation': {
+      title: 'Architecture Ablation — WikiText-2',
+      ylabel: 'Best BPB (lower is better)',
+      data: [
+        { label: 'LLaMA\n(all 4)', value: 3.226 },
+        { label: 'GPT+GQA', value: 3.583 },
+        { label: 'GPT+RoPE', value: 3.587 },
+        { label: 'GPT', value: 3.602 },
+        { label: 'GPT+RMSNorm', value: 3.607 },
+        { label: 'GPT+SwiGLU', value: 3.617 },
+      ],
+    },
     'babylm-results': {
       title: 'BabyLM Pretraining — BPB',
       ylabel: 'BPB',
