@@ -169,12 +169,13 @@ def credible_interval(
     rng = random.Random(42)  # Deterministic for reproducibility
     df = n - 1
 
+    bm = _BoxMuller()
     samples = []
     for _ in range(n_samples):
         # Generate t-distributed sample via ratio of normal/chi2
-        z = _standard_normal(rng)
+        z = bm.sample(rng)
         # Chi2(df) = sum of df standard normals squared
-        chi2 = sum(_standard_normal(rng) ** 2 for _ in range(df))
+        chi2 = sum(bm.sample(rng) ** 2 for _ in range(df))
         if chi2 < 1e-10:
             continue
         t_sample = z / math.sqrt(chi2 / df)
@@ -329,12 +330,41 @@ def multi_seed_summary(
     }
 
 
+class _BoxMuller:
+    """Box-Muller normal generator that uses both outputs.
+
+    Standard Box-Muller produces two independent N(0,1) samples
+    (one from cos, one from sin) but naive implementations discard
+    the sin output, wasting half the random numbers.
+    """
+
+    __slots__ = ('_spare', '_has_spare')
+
+    def __init__(self) -> None:
+        self._spare = 0.0
+        self._has_spare = False
+
+    def sample(self, rng: random.Random) -> float:
+        """Generate a standard normal sample."""
+        if self._has_spare:
+            self._has_spare = False
+            return self._spare
+
+        u1 = max(rng.random(), 1e-10)  # Avoid log(0)
+        u2 = rng.random()
+        mag = math.sqrt(-2 * math.log(u1))
+        angle = 2 * math.pi * u2
+
+        self._spare = mag * math.sin(angle)
+        self._has_spare = True
+        return mag * math.cos(angle)
+
+
 def _standard_normal(rng: random.Random) -> float:
     """Generate a standard normal sample using Box-Muller."""
-    u1 = rng.random()
+    # Fallback for callers that don't use the cached version
+    u1 = max(rng.random(), 1e-10)
     u2 = rng.random()
-    # Avoid log(0)
-    u1 = max(u1, 1e-10)
     return math.sqrt(-2 * math.log(u1)) * math.cos(2 * math.pi * u2)
 
 
@@ -346,6 +376,10 @@ def _posterior_samples(
     """Sample from the posterior distribution of the mean.
 
     Uses Student-t posterior: mu | data ~ t(N-1, x_bar, s/sqrt(N))
+
+    The t-sample is generated as Z / sqrt(V/df) where Z ~ N(0,1)
+    and V ~ Chi2(df). Uses the efficient _BoxMuller generator that
+    caches both outputs of the Box-Muller transform.
     """
     n = len(values)
     mean = sum(values) / n
@@ -357,10 +391,11 @@ def _posterior_samples(
     sem = std / math.sqrt(n)
     df = n - 1
 
+    bm = _BoxMuller()
     samples = []
     for _ in range(n_samples):
-        z = _standard_normal(rng)
-        chi2 = sum(_standard_normal(rng) ** 2 for _ in range(df))
+        z = bm.sample(rng)
+        chi2 = sum(bm.sample(rng) ** 2 for _ in range(df))
         if chi2 < 1e-10:
             samples.append(mean)
             continue

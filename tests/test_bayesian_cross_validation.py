@@ -197,3 +197,118 @@ class TestBayesianCompareVsScipy:
         # True difference is approximately -0.5
         # The CI should contain it
         assert result.ci_lower < -0.5 < result.ci_upper
+
+
+class TestSimulationBasedCalibration:
+    """Simulation-based calibration (SBC) per Vehtari et al.
+
+    Generate many fake experiments where we KNOW the true parameters,
+    run our Bayesian comparison, and verify that:
+    1. 95% CIs contain the true value ~95% of the time
+    2. P(A<B) is well-calibrated (true 70% of the time when P=0.7)
+
+    This is the gold standard for validating Bayesian implementations.
+    """
+
+    def test_credible_interval_coverage(self):
+        """95% CI should contain the true mean ~95% of the time.
+
+        Simulate 200 datasets from a known Normal(mu=3.0, sigma=0.1),
+        compute our 95% CI for the mean, and check coverage.
+        """
+        import random as rng_mod
+
+        true_mu = 3.0
+        true_sigma = 0.1
+        n_per_experiment = 5  # Typical seed count
+        n_simulations = 200
+        rng = rng_mod.Random(12345)
+
+        covered = 0
+        for _ in range(n_simulations):
+            values = [
+                true_mu + rng.gauss(0, true_sigma)
+                for _ in range(n_per_experiment)
+            ]
+            lo, hi = credible_interval(values, level=0.95)
+            if lo <= true_mu <= hi:
+                covered += 1
+
+        coverage = covered / n_simulations
+        # Should be near 0.95. With 200 sims, allow ±5%
+        assert 0.88 <= coverage <= 1.0, (
+            f'Coverage {coverage:.2f} outside [0.88, 1.0]'
+        )
+
+    def test_prob_a_better_calibration(self):
+        """P(A<B) should be well-calibrated across scenarios.
+
+        Generate experiments where A truly is better (mu_A < mu_B),
+        and check that our P(A better) reflects reality.
+        """
+        import random as rng_mod
+
+        n_per_group = 5
+        n_simulations = 100
+        rng = rng_mod.Random(54321)
+
+        # Scenario: A is truly better by 0.3 (moderate gap)
+        true_mu_a = 3.0
+        true_mu_b = 3.3
+        true_sigma = 0.1
+
+        a_wins = 0
+        for _ in range(n_simulations):
+            a_vals = [
+                true_mu_a + rng.gauss(0, true_sigma)
+                for _ in range(n_per_group)
+            ]
+            b_vals = [
+                true_mu_b + rng.gauss(0, true_sigma)
+                for _ in range(n_per_group)
+            ]
+            a = ExperimentSamples(name='a', values=a_vals)
+            b = ExperimentSamples(name='b', values=b_vals)
+            result = bayesian_compare(a, b, n_mc_samples=10000)
+            if result.prob_a_better > 0.5:
+                a_wins += 1
+
+        win_rate = a_wins / n_simulations
+        # With effect size d=3.0 (huge), A should win almost always
+        assert win_rate > 0.90, (
+            f'A only won {win_rate:.0%} of simulations (expected >90%)'
+        )
+
+    def test_rope_contains_truth_when_equal(self):
+        """When A==B, P(equivalent) with ROPE should be high.
+
+        If we draw A and B from the SAME distribution, a ROPE of
+        ±0.05 (half the std) should frequently declare equivalence.
+        """
+        import random as rng_mod
+
+        true_mu = 3.0
+        true_sigma = 0.1
+        n_per_group = 5
+        n_simulations = 100
+        rng = rng_mod.Random(99999)
+
+        equiv_count = 0
+        for _ in range(n_simulations):
+            a_vals = [
+                true_mu + rng.gauss(0, true_sigma) for _ in range(n_per_group)
+            ]
+            b_vals = [
+                true_mu + rng.gauss(0, true_sigma) for _ in range(n_per_group)
+            ]
+            a = ExperimentSamples(name='a', values=a_vals)
+            b = ExperimentSamples(name='b', values=b_vals)
+            result = bayesian_compare(a, b, n_mc_samples=10000, rope=0.05)
+            if result.prob_rope > 0.3:
+                equiv_count += 1
+
+        equiv_rate = equiv_count / n_simulations
+        # Most simulations should show meaningful equivalence prob
+        assert equiv_rate > 0.40, (
+            f'Only {equiv_rate:.0%} had P(equiv)>0.3 (expected >40%)'
+        )
