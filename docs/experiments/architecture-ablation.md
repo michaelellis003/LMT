@@ -131,17 +131,73 @@ Could this be a training artifact? Several sanity checks:
    because the model has enough capacity to exploit each optimization
    independently. This is a toy-scale phenomenon.
 
-## Running the Experiment
+## Pairwise Ablation: Finding the "Magic Pair"
+
+The single-feature ablation showed massive synergy. But *where* is the
+synergy concentrated? We tested all 6 pairwise combinations to find out.
+
+| Pair | BPB | vs GPT | vs LLaMA |
+|------|-----|--------|----------|
+| **RoPE + GQA** | **3.140** | **-12.8%** | **-2.7%** |
+| GQA + RMSNorm | 3.585 | -0.5% | +11.1% |
+| RoPE + RMSNorm | 3.594 | -0.2% | +11.4% |
+| SwiGLU + GQA | 3.596 | -0.2% | +11.5% |
+| RoPE + SwiGLU | 3.613 | +0.3% | +12.0% |
+| SwiGLU + RMSNorm | 3.619 | +0.5% | +12.2% |
+
+<div class="exp-chart" data-experiment="pairwise-ablation"></div>
+
+!!! success "RoPE + GQA is the magic pair"
+    RoPE + GQA alone achieves **-12.8% vs GPT** -- actually *better*
+    than full LLaMA (-10.4%)! It accounts for **123%** of the full
+    LLaMA improvement. All other pairs contribute essentially nothing.
+
+### Why RoPE + GQA?
+
+The synergy between RoPE and GQA makes intuitive sense:
+
+- **GQA** shares key-value heads across query groups. This forces the
+  model to learn more generalizable KV representations.
+- **RoPE** provides relative position information directly in the
+  attention computation. With GQA's shared KV heads, each shared head
+  must serve multiple query groups -- RoPE's position signal helps
+  disambiguate which tokens each query group should attend to.
+- Together, they create a powerful combination: GQA provides efficient,
+  shared representations while RoPE provides the position-awareness
+  needed to make those shared representations useful.
+
+### Why RoPE + GQA > full LLaMA?
+
+The fact that RoPE + GQA (3.14) outperforms full LLaMA (3.23) suggests
+that at this tiny scale, **SwiGLU and RMSNorm actually hurt slightly**
+when combined with RoPE + GQA. This could be because:
+
+- SwiGLU has more parameters in the gating mechanism, consuming
+  parameter budget that could be used elsewhere at this small scale
+- RMSNorm's simplification provides no benefit when LayerNorm's
+  mean-centering is useful for such small models
+- The interaction effects between 4 features are complex -- 2-way
+  synergy doesn't guarantee 4-way synergy
+
+## Running the Experiments
 
 ```bash
+# Single-feature ablation
 uv run python experiments/arch_ablation.py
+
+# Pairwise ablation
+.venv/bin/python experiments/pairwise_ablation.py
 ```
 
-Results are saved to `experiments/results/arch_ablation/registry.jsonl`.
+Results are saved to `experiments/results/`.
 
 ## Source Code
 
 - [`experiments/arch_ablation.py`](https://github.com/michaelellis003/LMT/blob/main/experiments/arch_ablation.py)
-  -- Full ablation experiment
+  -- Single-feature ablation
+- [`experiments/pairwise_ablation.py`](https://github.com/michaelellis003/LMT/blob/main/experiments/pairwise_ablation.py)
+  -- Pairwise ablation
 - [`tests/test_arch_ablation.py`](https://github.com/michaelellis003/LMT/blob/main/tests/test_arch_ablation.py)
-  -- Tests for all 6 ablation variants
+  -- Tests for single-feature variants
+- [`tests/test_pairwise_ablation.py`](https://github.com/michaelellis003/LMT/blob/main/tests/test_pairwise_ablation.py)
+  -- Tests for pairwise variants
