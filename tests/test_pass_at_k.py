@@ -54,8 +54,8 @@ class TestPassAtK:
 
     def test_pass_at_k_another_known_value(self):
         """n=10, c=3, k=2: 1 - C(7,2)/C(10,2) = 1 - 21/45 = 24/45."""
-        expected = 1.0 - math.comb(7, 2) / math.comb(10, 2)
-        assert pass_at_k(n=10, c=3, k=2) == pytest.approx(expected)
+        # 1 - C(7,2)/C(10,2) = 1 - 21/45 = 24/45
+        assert pass_at_k(n=10, c=3, k=2) == pytest.approx(24 / 45)
 
     def test_k_equals_n(self):
         """When k=n, pass@k = 1.0 if c >= 1, else 0.0."""
