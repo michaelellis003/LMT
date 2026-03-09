@@ -1,185 +1,89 @@
-# Experiments & Learnings
+# Experiments & Results
 
 These experiments document what we learned building LMT -- both positive
-results (things that worked) and negative/surprising results.
+results and negative/surprising results. Each experiment includes
+runnable code, reproducible results, and analysis.
 
-Full runnable code is available in [`notebooks/experiments.ipynb`](https://github.com/michaelellis003/LMT/blob/dev/notebooks/experiments.ipynb).
+## Architecture Studies
 
-## 1. Do Our Models Actually Learn Language?
+### [Architecture Comparison](architecture-comparison.md)
 
-The most important question: does it *actually work*? Shape tests and gradient
-checks are necessary but not sufficient. A model that passes all unit tests but
-can't learn "the cat sat on the mat" is a broken model.
+Does architecture choice matter? We compared GPT, LLaMA, Qwen3, Gemma,
+and Mixtral under controlled conditions on both random and real data.
 
-We train tiny models (2 layers, 64 embed_dim) on a small structured corpus
-using character-level tokenization:
+**Key finding**: On random data, all architectures are identical (0.03%
+spread). On WikiText-2, architecture matters -- Mixtral leads at 3.01 BPB,
+while GPT trails at 3.56 BPB (16.6% spread).
 
-```python
-from lmt import ModelConfig, CharTokenizer
-from lmt.layers.blocks.configurable_block import BlockConfig
-from lmt.models.base import BaseModel
+### [Architecture Ablation](architecture-ablation.md)
 
-CORPUS = (
-    'the cat sat on the mat. '
-    'the dog sat on the log. '
-) * 20
+LLaMA beats GPT by ~11% on WikiText-2. Which of its four innovations
+(RoPE, SwiGLU, GQA, RMSNorm) drive the improvement? We isolate each
+feature using the `ConfigurableBlock` system.
 
-tokenizer = CharTokenizer.from_text(CORPUS)
+## Pretraining Recipes
 
-config = ModelConfig(
-    vocab_size=tokenizer.vocab_size, embed_dim=64,
-    num_heads=4, num_kv_heads=4, num_layers=2,
-    context_length=32, dropout=0.0,
-)
+### [BabyLM Pretraining](babylm-pretraining.md)
 
-# MHA (GPT-style)
-mha = BaseModel(config,
-    BlockConfig(attention='mha', ffn='default', norm='rmsnorm'),
-    learned_pos_embed=True)
+End-to-end pretraining pipeline for the BabyLM Challenge: data loading,
+BPE tokenizer training, model creation, training, and BPB evaluation.
+Achieves 76% improvement over random with just 50K words and a 1M
+parameter model.
 
-# GQA + SwiGLU (LLaMA-style)
-gqa = BaseModel(config,
-    BlockConfig(attention='gqa', ffn='swiglu', norm='rmsnorm'),
-    learned_pos_embed=True)
-```
+## Classic Experiments
 
-**Result**: Both models train well below random chance loss within 30 epochs.
-MHA and GQA+SwiGLU both learn language structure from this tiny corpus.
+### Do Our Models Actually Learn Language?
 
-## 2. What Makes LLaMA Better Than GPT?
+The most important question: does it *actually work*? We train tiny models
+(2 layers, 64 embed_dim) on a small structured corpus using character-level
+tokenization.
 
-LLaMA differs from GPT-2 in four ways: RMSNorm, SwiGLU, RoPE, and GQA.
-We ablated each change independently:
+**Result**: Both MHA (GPT-style) and GQA+SwiGLU (LLaMA-style) train well
+below random chance loss within 30 epochs.
 
-| Configuration      | Final Loss | vs Random |
-|--------------------|-----------|-----------|
-| GPT baseline       | moderate  | good      |
-| + RMSNorm          | ~same     | ~same     |
-| + SwiGLU           | **lower** | **best**  |
-| + GQA              | ~same     | ~same     |
+### The SSM-Attention Duality
 
-**Key finding**: **SwiGLU makes the biggest difference**. The gated activation
-learns feature selection, not just nonlinearity. RMSNorm vs LayerNorm shows
-minimal difference at this scale. GQA matches MHA quality (same expressiveness,
-just shared KV heads).
+Mamba-2 (Dao & Gu, 2024) proved that SSMs and attention are two different
+algorithms for multiplying by the same matrix (a semiseparable matrix).
+Our SSD layer implements both forms and verifies they produce identical
+outputs (max difference ~1e-7).
 
-## 3. The SSM-Attention Duality is Real
+### The Delta Rule: Gradient Descent Inside a Neural Network
 
-Mamba-2 (Dao & Gu, 2024) proved that SSMs and attention are literally two
-different algorithms for multiplying by the *same matrix* (a semiseparable
-matrix).
+Gated Delta Networks use the delta rule to update an associative memory.
+We tested retrieval quality and found the delta rule advantage grows with
+the number of stored pairs -- when capacity is exceeded, linear attention
+degrades but the delta rule stays accurate through error correction.
 
-Our SSD layer implements both forms:
+### Negative Result: Linear Attention is Slow in Python
 
-- **Recurrent** (SSM): process tokens sequentially, O(T) time
-- **Quadratic** (attention): materialize full T×T matrix, O(T²) time
+In theory, linear attention is O(n*d^2) vs O(n^2*d) for softmax. In
+practice, our Python implementation is slower at every tested length due
+to sequential for-loops vs optimized `torch.matmul`.
 
-```python
-from lmt.layers.attention.ssd import SSDAttention
+**Lesson**: Algorithmic complexity != wall-clock time.
 
-ssd = SSDAttention(config)
-x = torch.randn(2, 16, 32)
+### Scaling Up: TinyStories with BPE
 
-y_recurrent = ssd.forward_recurrent(x)
-y_quadratic = ssd.forward_quadratic(x)
+A 30.5M parameter GPT trained on TinyStories with GPT-2 BPE tokenization
+reaches loss 2.83 (perplexity ~17) after 5 epochs -- 74% below random
+baseline. BPE tokenization makes a huge difference vs character-level.
 
-# Max difference: ~1e-7 (floating-point precision)
-torch.allclose(y_recurrent, y_quadratic, atol=1e-5)  # True!
-```
-
-**Result**: The duality is verified. Both forms produce identical outputs.
-When alpha=1 (no decay), SSD reduces exactly to causal linear attention,
-connecting SSMs, linear attention, and structured matrices.
-
-## 4. The Delta Rule: Gradient Descent Inside a Neural Network
-
-Gated Delta Networks use the delta rule to update an associative memory:
-
-$$S_t = \alpha \cdot S_{t-1} + \beta \cdot (v_t - S_{t-1} k_t) k_t^T$$
-
-The term $(v_t - S_{t-1} k_t)$ is the *error* between what the memory
-predicts and reality -- literally one step of gradient descent on
-$\|Sk - v\|^2$.
-
-We tested retrieval quality: store N key-value pairs and see how well
-they can be recovered.
-
-| d=16, pairs | Linear Attention | Delta Rule | Improvement |
-|-------------|-----------------|------------|-------------|
-| 4           | low error       | ~zero      | moderate    |
-| 16          | moderate error  | ~zero      | large       |
-| 64          | high error      | low error  | **huge**    |
-
-**Key insight**: The delta rule advantage grows with the number of stored
-pairs. When capacity is exceeded (n_pairs > d), linear attention degrades
-badly but the delta rule stays accurate through error correction.
-
-## 5. Negative Result: Linear Attention is Slow in Python
-
-In theory, linear attention (GDN, SSD) is O(n·d²) vs O(n²·d) for
-softmax attention. In practice, our Python implementation is **slower**
-than MHA at every tested sequence length.
-
-Why?
-
-1. **Python for-loop** over sequence length (no parallel scan)
-2. **MHA uses optimized `torch.matmul`** for the full QK^T computation
-3. **At seq_len≤128**, n is not >> d, so O(n·d²) > O(n²·d)
-
-The theoretical advantage only manifests with CUDA kernels (parallel scan,
-chunkwise algorithms) and long sequences (n >> d).
-
-**Lesson**: Algorithmic complexity ≠ wall-clock time. Implementation
-efficiency matters as much as theoretical complexity.
-
-## 6. Scaling Up: TinyStories with BPE
-
-Our first real-scale experiment: training a 30.5M parameter GPT model on
-the TinyStories dataset using GPT-2 BPE tokenization (50,257 vocab).
-
-| Epoch | Train Loss | % Below Random |
-|-------|-----------|----------------|
-| 1     | 5.14      | 52.5%          |
-| 2     | 3.60      | 66.8%          |
-| 3     | 3.22      | 70.2%          |
-| 4     | 2.99      | 72.4%          |
-| 5     | 2.83      | 73.9%          |
-
-Random baseline: $\ln(50257) \approx 10.83$. Final loss of 2.83 = perplexity ~17.
-
-**Config**: 256 embed_dim, 8 heads, 6 layers, context length 256, batch
-size 32, lr 3e-4, trained on Apple M3 Pro GPU (MPS).
-
-**Key insight**: BPE tokenization makes a **huge** difference compared to
-character-level. Each BPE token carries ~3-4 characters of semantic content,
-so the model sees more meaning per position. The loss was still decreasing
-at epoch 5 -- more training would likely push it lower.
+## Running Experiments
 
 ```bash
-python examples/train_tinystories.py --embed-dim 256 --num-layers 6 \
-    --num-heads 8 --epochs 5 --device mps --use-valid-only
+# Architecture comparison (random data, ~2 min)
+uv run python experiments/arch_comparison.py
+
+# Architecture comparison (WikiText-2, ~5 min)
+uv run python experiments/arch_comparison_wikitext.py
+
+# Architecture ablation (~10 min)
+uv run python experiments/arch_ablation.py
+
+# BabyLM pretraining (quick test, ~2 min)
+uv run python recipes/babylm_pretrain.py --max-words 100000
 ```
 
-## Running the Experiments
-
-Clone the repo and run the notebook:
-
-```bash
-git clone https://github.com/michaelellis003/LMT.git
-cd LMT
-pip install uv && uv sync
-jupyter notebook notebooks/experiments.ipynb
-```
-
-Or run the training recipes directly:
-
-```bash
-# Quick character-level experiment (~2 min)
-python examples/train_shakespeare.py --epochs 10 --device cpu
-
-# Compare attention variants (MHA, GQA, GDN, SSD)
-python examples/compare_attention.py --epochs 10 --device cpu
-
-# Real-scale BPE training on TinyStories
-python examples/train_tinystories.py --epochs 5 --device cpu --use-valid-only
-```
+All results are saved to `experiments/results/` as JSONL registry files
+for reproducibility.

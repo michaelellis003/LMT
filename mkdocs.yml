@@ -95,6 +95,9 @@ nav:
       - Mamba: models/mamba.md
   - Experiments:
       - Overview: experiments/index.md
+      - Architecture Comparison: experiments/architecture-comparison.md
+      - Architecture Ablation: experiments/architecture-ablation.md
+      - BabyLM Pretraining: experiments/babylm-pretraining.md
   - Interactive:
       - Attention Patterns: visualizations/attention-patterns.md
       - RoPE Explorer: visualizations/rope-explorer.md
