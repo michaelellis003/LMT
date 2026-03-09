@@ -56,6 +56,8 @@ extra_javascript:
   - javascripts/rope-viz.js
   - javascripts/pos-encoding-compare.js
   - javascripts/tokenizer-viz.js
+  - javascripts/experiment-charts.js
+  - javascripts/arch-explorer.js
 
 plugins:
   - search
@@ -95,11 +97,15 @@ nav:
       - Mamba: models/mamba.md
   - Experiments:
       - Overview: experiments/index.md
+      - Architecture Comparison: experiments/architecture-comparison.md
+      - Architecture Ablation: experiments/architecture-ablation.md
+      - BabyLM Pretraining: experiments/babylm-pretraining.md
   - Interactive:
       - Attention Patterns: visualizations/attention-patterns.md
       - RoPE Explorer: visualizations/rope-explorer.md
       - Positional Encoding: visualizations/positional-encoding.md
       - Tokenizer Comparison: visualizations/tokenizer-comparison.md
+      - Architecture Explorer: visualizations/architecture-explorer.md
   - API Reference:
       - Layers: api/layers.md
       - Models: api/models.md
