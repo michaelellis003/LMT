@@ -116,7 +116,7 @@ docstring-code-format = true
 docstring-code-line-length = "dynamic"
 
 [tool.pyright]
-exclude = ["tests", "src/lmt/training/lm_eval_adapter.py"]
+exclude = ["tests", "src/lmt/training/lm_eval_adapter.py", "src/lmt/eval/benchmarks.py"]
 extraPaths = ["src"]
 venvPath = "./"
 venv = ".venv"
