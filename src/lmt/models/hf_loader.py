@@ -168,9 +168,20 @@ def config_from_hf(hf_config: dict) -> ModelConfig:
     # Qwen3 always uses QK-norm
     qk_norm = model_type == 'qwen3'
 
+    # head_dim: only set if it differs from embed_dim // num_heads
+    hf_head_dim = hf_config.get('head_dim')
+    hidden_size = hf_config['hidden_size']
+    num_heads = hf_config['num_attention_heads']
+    default_head_dim = hidden_size // num_heads
+    head_dim = (
+        hf_head_dim
+        if hf_head_dim and hf_head_dim != default_head_dim
+        else None
+    )
+
     return ModelConfig(
-        embed_dim=hf_config['hidden_size'],
-        num_heads=hf_config['num_attention_heads'],
+        embed_dim=hidden_size,
+        num_heads=num_heads,
         num_kv_heads=hf_config.get('num_key_value_heads'),
         num_layers=hf_config['num_hidden_layers'],
         ffn_hidden_dim=hf_config.get('intermediate_size'),
@@ -178,6 +189,7 @@ def config_from_hf(hf_config: dict) -> ModelConfig:
         context_length=hf_config.get('max_position_embeddings', 2048),
         tie_weights=hf_config.get('tie_word_embeddings', False),
         qk_norm=qk_norm,
+        head_dim=head_dim,
         dropout=0.0,
     )
 
@@ -259,6 +271,146 @@ def load_hf_state_dict(
         )
 
     return missing, unexpected
+
+
+def download_hf_config(
+    repo_id: str,
+    *,
+    return_model_type: bool = False,
+    revision: str | None = None,
+) -> ModelConfig | tuple[ModelConfig, str]:
+    """Download a model config from HuggingFace Hub and convert to LMT.
+
+    Uses ``huggingface_hub`` to fetch ``config.json`` from the given
+    repository and converts it to an LMT ``ModelConfig``.
+
+    Args:
+        repo_id: HuggingFace repository ID (e.g. ``'Qwen/Qwen3-0.6B'``).
+        return_model_type: If True, also return the HF model type string.
+        revision: Optional git revision (branch, tag, or commit hash).
+
+    Returns:
+        ``ModelConfig`` if ``return_model_type`` is False, otherwise
+        a tuple of ``(ModelConfig, model_type_string)``.
+    """
+    import json
+
+    from huggingface_hub import hf_hub_download
+
+    config_path = hf_hub_download(
+        repo_id,
+        'config.json',
+        revision=revision,
+    )
+
+    with open(config_path) as f:
+        hf_config = json.load(f)
+
+    config = config_from_hf(hf_config)
+    if return_model_type:
+        return config, hf_config.get('model_type', '')
+    return config
+
+
+def _get_model_class(model_type: str) -> type[nn.Module]:
+    """Get the LMT model class for a HuggingFace model type.
+
+    Args:
+        model_type: HF model type string (e.g. ``'qwen3'``, ``'llama'``).
+
+    Returns:
+        The corresponding LMT model class.
+
+    Raises:
+        ValueError: If the model type is not supported.
+    """
+    # Lazy imports to avoid circular dependencies
+    from lmt.models.llama.llama import LLaMA
+    from lmt.models.qwen3.qwen3 import Qwen3
+
+    registry: dict[str, type[nn.Module]] = {
+        'qwen3': Qwen3,
+        'llama': LLaMA,
+    }
+
+    if model_type not in registry:
+        supported = ', '.join(sorted(registry))
+        raise ValueError(
+            f'Unsupported model type {model_type!r}. Supported: {supported}'
+        )
+    return registry[model_type]
+
+
+def load_from_hub(
+    repo_id: str,
+    *,
+    revision: str | None = None,
+    device: str = 'cpu',
+    dtype: torch.dtype | None = None,
+    context_length: int | None = None,
+) -> nn.Module:
+    """Download and load a full model from HuggingFace Hub.
+
+    Downloads the config and safetensors weights, creates the
+    corresponding LMT model, and loads the weights.
+
+    Args:
+        repo_id: HuggingFace repository ID (e.g. ``'Qwen/Qwen3-0.6B'``).
+        revision: Optional git revision (branch, tag, or commit hash).
+        device: Device to load the model on (default ``'cpu'``).
+        dtype: Optional dtype to cast the model to (e.g. ``torch.bfloat16``).
+        context_length: Override the context length from the config.
+            Useful for reducing memory when the full context (e.g.
+            40960) is not needed.
+
+    Returns:
+        The LMT model with pretrained weights loaded.
+    """
+    import dataclasses
+
+    from huggingface_hub import HfApi
+    from safetensors.torch import load_file
+
+    # Download config and get model type
+    result = download_hf_config(
+        repo_id, return_model_type=True, revision=revision
+    )
+    assert isinstance(result, tuple)
+    config, model_type = result
+
+    # Override context length if specified (saves memory on causal mask)
+    if context_length is not None:
+        config = dataclasses.replace(config, context_length=context_length)
+
+    # Create the model
+    model_cls = _get_model_class(model_type)
+    model = model_cls(config)
+
+    # Download safetensors weight files
+    api = HfApi()
+    repo_files = api.list_repo_files(repo_id, revision=revision)
+    safetensor_files = [f for f in repo_files if f.endswith('.safetensors')]
+
+    if not safetensor_files:
+        raise FileNotFoundError(f'No .safetensors files found in {repo_id!r}')
+
+    # Load and merge all safetensors shards
+    from huggingface_hub import hf_hub_download
+
+    hf_state_dict: dict[str, torch.Tensor] = {}
+    for filename in safetensor_files:
+        local_path = hf_hub_download(repo_id, filename, revision=revision)
+        shard = load_file(local_path)
+        hf_state_dict.update(shard)
+
+    # Load weights into the model
+    load_hf_state_dict(model, hf_state_dict, model_type)
+
+    if dtype is not None:
+        model = model.to(dtype=dtype)
+    model = model.to(device)
+    model.eval()
+    return model
 
 
 def save_as_safetensors(
