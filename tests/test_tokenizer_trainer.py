@@ -2,7 +2,10 @@
 
 import pytest
 
-from lmt.tokenizer.trainer import train_bpe_tokenizer
+tokenizers = pytest.importorskip('tokenizers')
+transformers = pytest.importorskip('transformers')
+
+from lmt.tokenizer.trainer import train_bpe_tokenizer  # noqa: E402
 
 
 class TestTrainBPETokenizer:
