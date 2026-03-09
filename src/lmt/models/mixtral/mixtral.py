@@ -39,7 +39,7 @@ class Mixtral(BaseModel):
             num_experts: Experts per MoE layer.
             top_k: Experts activated per token.
         """
-        head_dim = config.embed_dim // config.num_heads
+        head_dim = config.head_dim or config.embed_dim // config.num_heads
         rope = RoPE(
             d_model=head_dim,
             max_seq_len=config.context_length,
