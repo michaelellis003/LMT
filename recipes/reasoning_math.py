@@ -30,89 +30,89 @@ References:
 """
 
 import argparse
-import collections.abc
 import json
 from pathlib import Path
 
 import torch
 
-from lmt.data.math_data import MathDataItem, format_math_prompt
+from lmt.data.math_data import load_math_items
 from lmt.models.config import ModelConfig
+from lmt.recipes.reasoning import create_math_reward_fn
 from lmt.training.grpo_trainer import GRPOConfig, GRPOTrainer
 from lmt.training.reproducibility import ExperimentConfig, set_seed
 
 
-def create_math_prompts() -> list[MathDataItem]:
-    """Create a small set of math problems for testing.
-
-    In a real experiment, this would load GSM8K or MATH from
-    HuggingFace datasets. For now, we use a curated set that
-    exercises basic arithmetic and algebra.
+def create_mock_gsm8k_data() -> list[dict[str, str]]:
+    """Create mock GSM8K-format data for dry runs.
 
     Returns:
-        List of MathDataItem with prompt and ground_truth.
+        List of dicts with 'question' and 'answer' fields.
     """
-    problems = [
-        ('What is 15 + 27?', '42'),
-        ('What is 144 / 12?', '12'),
-        ('What is 7 * 8?', '56'),
-        ('If x + 5 = 12, what is x?', '7'),
-        ('What is 100 - 37?', '63'),
-        ('What is 2^8?', '256'),
-        ('What is the square root of 49?', '7'),
-        ('What is 3/4 + 1/4?', '1'),
-    ]
-
     return [
-        MathDataItem(
-            prompt=format_math_prompt(problem),
-            ground_truth=answer,
-        )
-        for problem, answer in problems
+        {
+            'question': 'What is 15 + 27?',
+            'answer': 'Fifteen plus twenty-seven is forty-two. #### 42',
+        },
+        {
+            'question': 'What is 144 / 12?',
+            'answer': '144 divided by 12 is 12. #### 12',
+        },
+        {
+            'question': 'What is 7 * 8?',
+            'answer': 'Seven times eight is fifty-six. #### 56',
+        },
+        {
+            'question': 'If x + 5 = 12, what is x?',
+            'answer': 'x = 12 - 5 = 7. #### 7',
+        },
     ]
 
 
-def make_reward_fn(
-    ground_truth: str,
-) -> collections.abc.Callable[[torch.Tensor, torch.Tensor], float]:
-    r"""Create a placeholder reward function for a math problem.
+class MockTokenizer:
+    """Simple character-level tokenizer for dry-run testing.
 
-    .. warning::
-
-        This is a **stub** that returns random binary rewards.
-        It does NOT decode tokens or check against ``ground_truth``.
-        A real implementation would use a tokenizer to decode
-        ``response_ids`` back to text, then call
-        :func:`lmt.training.rewards.math_reward` to compare
-        the extracted answer against ``ground_truth``.
-
-    Args:
-        ground_truth: The correct answer string (unused in this stub).
-
-    Returns:
-        Callable(prompt_ids, response_ids) -> float that returns
-        random 0.0 or 1.0 (placeholder).
+    Not suitable for real training but validates the pipeline
+    end-to-end including reward function decoding.
     """
 
-    def reward_fn(
-        prompt_ids: torch.Tensor,
-        response_ids: torch.Tensor,
-    ) -> float:
-        """Return random binary reward (placeholder)."""
-        # TODO: Integrate tokenizer for proper decoding
-        # Real version: decode response_ids → text → math_reward()
-        return float(torch.rand(1).item() > 0.5)
+    def __init__(self, vocab_size: int = 256) -> None:
+        """Initialize mock tokenizer.
 
-    return reward_fn
+        Args:
+            vocab_size: Size of the vocabulary.
+        """
+        self.vocab_size = vocab_size
+
+    def encode(self, text: str) -> list[int]:
+        """Encode text to character-level token IDs.
+
+        Args:
+            text: Input text string.
+
+        Returns:
+            List of integer token IDs.
+        """
+        return [ord(c) % self.vocab_size for c in text]
+
+    def decode(self, ids: list[int]) -> str:
+        """Decode token IDs back to text.
+
+        Args:
+            ids: List of token IDs.
+
+        Returns:
+            Decoded text string.
+        """
+        return ''.join(chr(i) for i in ids if 32 <= i < 127)
 
 
 def run_dry_run() -> None:
-    """Run a minimal GRPO training loop on a tiny model.
+    """Run a minimal GRPO training loop with real reward wiring.
 
-    This validates the entire pipeline works without GPU or
-    pretrained weights. Uses random data and rewards.
+    Validates the full pipeline: math data loading, reward bridge,
+    GRPO training. Uses mock data and tiny model (no GPU needed).
     """
-    print('=== DRY RUN: Validating GRPO pipeline ===')
+    print('=== DRY RUN: Validating GRPO math reasoning pipeline ===')
 
     set_seed(42)
 
@@ -135,36 +135,44 @@ def run_dry_run() -> None:
     model = Qwen3(config)
     print(f'Model params: {sum(p.numel() for p in model.parameters()):,}')
 
+    # Load mock math data using the real loader
+    mock_rows = create_mock_gsm8k_data()
+    items = load_math_items(
+        mock_rows, dataset_format='gsm8k', format_prompts=True
+    )
+    print(f'Math problems loaded: {len(items)}')
+
+    # Create tokenizer for reward bridge
+    tokenizer = MockTokenizer(vocab_size=config.vocab_size)
+
     grpo_config = GRPOConfig(
-        group_size=4,
+        group_size=2,
         max_response_len=8,
         clip_eps=0.2,
-        kl_coeff=0.0,
+        kl_coeff=0.0,  # No KL penalty (Raschka's finding)
         lr=5e-5,
-        temperature=0.7,
-        top_k=20,
+        temperature=1.0,
         device='cpu',
     )
 
     trainer = GRPOTrainer(model, grpo_config)
 
-    # Create a simple prompt (random tokens)
-    prompt = torch.randint(0, 256, (4,))
+    # Train on each math problem using real reward bridge
+    print('Running GRPO training...')
+    for step, item in enumerate(items):
+        reward_fn = create_math_reward_fn(item, tokenizer)
+        prompt_ids = torch.tensor(
+            tokenizer.encode(item.prompt), dtype=torch.long
+        )
+        # Truncate to fit context
+        prompt_ids = prompt_ids[: config.context_length // 2]
 
-    # Dummy reward function
-    def dummy_reward(
-        prompt_ids: torch.Tensor,
-        response_ids: torch.Tensor,
-    ) -> float:
-        return float(torch.rand(1).item())
-
-    print('Running 3 GRPO steps...')
-    for step in range(3):
-        loss = trainer.train_step(prompt, dummy_reward)
-        print(f'  Step {step}: loss={loss:.4f}')
+        loss = trainer.train_step(prompt_ids, reward_fn)
+        print(f'  Step {step}: loss={loss:.4f} | {item.ground_truth}')
 
     print('=== DRY RUN COMPLETE ===')
-    print('Pipeline validated. Ready for real training with GPU + data.')
+    print('Pipeline validated with real reward wiring.')
+    print('For real training: use pretrained model + GSM8K + GPU.')
 
 
 def run_training(args: argparse.Namespace) -> None:
