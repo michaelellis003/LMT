@@ -52,6 +52,7 @@ class ModelConfig:
     window_size: int | None = None  # None = full attention
     tie_weights: bool = False  # Tie input/output embedding weights
     qk_norm: bool = False  # Apply RMSNorm to Q and K before dot product
+    value_residual_mix: float = 0.0  # Blend first layer's V into later layers
 
 
 class ModelConfigPresets:

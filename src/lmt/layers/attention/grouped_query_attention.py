@@ -130,6 +130,13 @@ class GroupedQueryAttention(nn.Module):
         # Set to a KVCache instance to enable caching.
         self.kv_cache: KVCache | None = None
 
+        # Value-residual: set by BaseModel to blend first layer's V.
+        # These are module attributes, not constructor params, to keep
+        # the layer API clean (same pattern as aux_loss).
+        self._raw_v: Tensor | None = None
+        self._first_layer_v: Tensor | None = None
+        self._value_residual_mix: float = 0.0
+
     def forward(self, x: Tensor) -> Tensor:
         """Apply grouped query attention.
 
@@ -181,6 +188,14 @@ class GroupedQueryAttention(nn.Module):
             q = q.transpose(1, 2)
             k = k.transpose(1, 2)
             v = v.transpose(1, 2)
+
+        # Store raw V for value-residual (before blend/cache)
+        self._raw_v = v
+
+        # Value-residual: blend with first layer's V
+        if self._first_layer_v is not None and self._value_residual_mix > 0.0:
+            lam = self._value_residual_mix
+            v = (1.0 - lam) * v + lam * self._first_layer_v
 
         # Update KV cache if active
         if self.kv_cache is not None:
