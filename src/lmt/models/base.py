@@ -182,6 +182,46 @@ class BaseModel(nn.Module):
                 if ffn_out is not None and isinstance(ffn_out, nn.Linear):
                     nn.init.normal_(ffn_out.weight, mean=0.0, std=std)
 
+    def _update_value_residual(
+        self,
+        block: ConfigurableBlock,
+        layer_idx: int,
+        first_layer_v: Tensor | None,
+    ) -> Tensor | None:
+        """Update value-residual state after a block forward pass.
+
+        After layer 0, captures the raw V. For subsequent layers,
+        sets ``_first_layer_v`` so they blend on the next forward.
+
+        Args:
+            block: The block that just ran.
+            layer_idx: Index of this block.
+            first_layer_v: The first layer's raw V, or None.
+
+        Returns:
+            Updated first_layer_v.
+        """
+        attn = block.attn
+        raw_v = getattr(attn, '_raw_v', None)
+        if raw_v is None:
+            return first_layer_v
+
+        if layer_idx == 0:
+            first_layer_v = raw_v.detach()
+
+        # Set V₁ and mix on the NEXT layer's attention (already ran
+        # for current layer, so this takes effect on the next forward)
+        mix = self.config.value_residual_mix
+        next_idx = layer_idx + 1
+        if first_layer_v is not None and next_idx < len(self.blocks):
+            next_block: ConfigurableBlock = self.blocks[next_idx]  # type: ignore[assignment]
+            next_attn = next_block.attn
+            if hasattr(next_attn, '_first_layer_v'):
+                next_attn._first_layer_v = first_layer_v  # type: ignore[union-attr]
+                next_attn._value_residual_mix = mix  # type: ignore[union-attr]
+
+        return first_layer_v
+
     def forward_hidden(self, in_idx: Tensor) -> Tensor:
         """Forward pass returning hidden states before the LM head.
 
@@ -204,9 +244,12 @@ class BaseModel(nn.Module):
 
         x = self.drop(x)
 
+        use_value_residual = self.config.value_residual_mix > 0.0
+        first_layer_v = None
+
         if self._has_moe:
             total_aux = torch.tensor(0.0, device=x.device)
-            for block in self.blocks:
+            for i, block in enumerate(self.blocks):
                 if self.gradient_checkpointing and self.training:
                     x = grad_checkpoint(block, x, use_reentrant=False)
                 else:
@@ -214,13 +257,27 @@ class BaseModel(nn.Module):
                 cfg_block: ConfigurableBlock = block  # type: ignore[assignment]
                 if isinstance(cfg_block.ffn, MoEFeedForward):
                     total_aux = total_aux + cfg_block.ffn.aux_loss
+                if use_value_residual:
+                    first_layer_v = self._update_value_residual(
+                        cfg_block, i, first_layer_v
+                    )
             self.aux_loss = total_aux
         elif self.gradient_checkpointing and self.training:
-            for block in self.blocks:
+            for i, block in enumerate(self.blocks):
                 x = grad_checkpoint(block, x, use_reentrant=False)
+                if use_value_residual:
+                    cfg_block = block  # type: ignore[assignment]
+                    first_layer_v = self._update_value_residual(
+                        cfg_block, i, first_layer_v
+                    )
         else:
-            for block in self.blocks:
+            for i, block in enumerate(self.blocks):
                 x = block(x)
+                if use_value_residual:
+                    cfg_block = block  # type: ignore[assignment]
+                    first_layer_v = self._update_value_residual(
+                        cfg_block, i, first_layer_v
+                    )
 
         return self.final_norm(x)
 
