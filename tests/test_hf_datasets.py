@@ -3,6 +3,7 @@
 import pytest
 
 from lmt.data.hf_datasets import (
+    download_babylm,
     download_gsm8k,
     download_humaneval,
     download_math,
@@ -202,3 +203,83 @@ class TestDownloadWikitext2:
         texts = download_wikitext2(rows=mock_rows, max_items=2)
         assert len(texts) == 2
         assert texts == ['A', 'B']
+
+
+class TestDownloadBabyLM:
+    """Test BabyLM dataset download."""
+
+    @pytest.mark.slow
+    def test_download_babylm_strict(self):
+        """Should download BabyLM strict (100M) train split."""
+        datasets = pytest.importorskip('datasets')
+        try:
+            texts = download_babylm(
+                track='strict', split='train', max_items=10
+            )
+        except (
+            datasets.exceptions.DatasetNotFoundError,
+            ConnectionError,
+            OSError,
+        ):
+            pytest.skip('BabyLM dataset not accessible')
+        assert len(texts) == 10
+        assert all(isinstance(t, str) for t in texts)
+        assert all(len(t) > 0 for t in texts)
+
+    @pytest.mark.slow
+    def test_download_babylm_strict_small(self):
+        """Should download BabyLM strict-small (10M) split."""
+        datasets = pytest.importorskip('datasets')
+        try:
+            texts = download_babylm(
+                track='strict-small', split='train', max_items=5
+            )
+        except (
+            datasets.exceptions.DatasetNotFoundError,
+            ConnectionError,
+            OSError,
+        ):
+            pytest.skip('BabyLM dataset not accessible')
+        assert len(texts) <= 5
+        assert all(isinstance(t, str) for t in texts)
+
+    def test_download_babylm_mock(self):
+        """Should work with mock data (no network)."""
+        mock_rows = [
+            {'text': 'just like your book at home .'},
+            {'text': ''},
+            {'text': 'do you want to look at that ?'},
+            {'text': 'see .'},
+        ]
+        texts = download_babylm(rows=mock_rows)
+        # Should filter empty lines by default
+        assert len(texts) == 3
+        assert texts[0] == 'just like your book at home .'
+
+    def test_download_babylm_mock_no_filter(self):
+        """Should keep empty lines when filter_empty=False."""
+        mock_rows = [
+            {'text': 'hello'},
+            {'text': ''},
+            {'text': 'world'},
+        ]
+        texts = download_babylm(rows=mock_rows, filter_empty=False)
+        assert len(texts) == 3
+
+    def test_download_babylm_max_items(self):
+        """Should respect max_items after filtering."""
+        mock_rows = [
+            {'text': 'a'},
+            {'text': ''},
+            {'text': 'b'},
+            {'text': 'c'},
+            {'text': 'd'},
+        ]
+        texts = download_babylm(rows=mock_rows, max_items=2)
+        assert len(texts) == 2
+        assert texts == ['a', 'b']
+
+    def test_download_babylm_invalid_track(self):
+        """Should raise ValueError for invalid track name."""
+        with pytest.raises(ValueError, match='Unknown track'):
+            download_babylm(track='invalid')

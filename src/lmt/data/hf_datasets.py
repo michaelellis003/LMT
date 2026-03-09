@@ -109,6 +109,67 @@ def download_humaneval(
     )
 
 
+_BABYLM_TRACKS: dict[str, str] = {
+    'strict': 'nilq/babylm-100M',
+    'strict-small': 'nilq/babylm-10M',
+}
+
+
+def download_babylm(
+    track: str = 'strict',
+    split: str = 'train',
+    max_items: int | None = None,
+    filter_empty: bool = True,
+    rows: list[dict[str, Any]] | None = None,
+) -> list[str]:
+    """Download BabyLM Challenge dataset as text lines.
+
+    The BabyLM corpus contains child-directed speech, subtitles,
+    children's books, and other developmentally plausible text.
+    Used for the BabyLM Challenge (sample-efficient pretraining).
+
+    The datasets are large (10M+ rows for strict, 1M+ for
+    strict-small), so ``max_items`` is recommended to limit
+    download size. Uses streaming to avoid downloading the
+    full corpus when ``max_items`` is set.
+
+    Args:
+        track: Competition track. ``'strict'`` (100M words) or
+            ``'strict-small'`` (10M words).
+        split: Dataset split (``'train'``, ``'test'``,
+            ``'validation'``).
+        max_items: Maximum text lines to return. Strongly
+            recommended — the full dataset is very large.
+        filter_empty: If True (default), filter out empty lines.
+        rows: Pre-loaded rows (skips download if provided).
+
+    Returns:
+        List of text strings from the BabyLM corpus.
+
+    Raises:
+        ValueError: If ``track`` is not recognized.
+    """
+    if rows is None:
+        if track not in _BABYLM_TRACKS:
+            available = ', '.join(sorted(_BABYLM_TRACKS.keys()))
+            raise ValueError(
+                f'Unknown track: {track!r}. Available: {available}'
+            )
+        repo_id = _BABYLM_TRACKS[track]
+        rows = _download_hf_rows_streaming(repo_id, split, max_items)
+
+    texts: list[str] = []
+    for row in rows:
+        text = row.get('text', '')
+        if filter_empty and not text.strip():
+            continue
+        texts.append(text)
+        if max_items is not None and len(texts) >= max_items:
+            break
+
+    return texts
+
+
 def download_wikitext2(
     split: str = 'train',
     max_items: int | None = None,
@@ -184,3 +245,42 @@ def _download_hf_rows(
         ds = ds.select(range(min(max_items, len(ds))))
 
     return list(ds)
+
+
+def _download_hf_rows_streaming(
+    repo_id: str,
+    split: str,
+    max_items: int | None,
+) -> list[dict[str, Any]]:
+    """Download rows from a HuggingFace dataset using streaming.
+
+    More memory-efficient than :func:`_download_hf_rows` for large
+    datasets. Streams rows one at a time and stops after ``max_items``.
+
+    Args:
+        repo_id: HuggingFace dataset repository ID.
+        split: Dataset split name.
+        max_items: Maximum rows to return. None downloads all
+            (not recommended for large datasets).
+
+    Returns:
+        List of row dicts.
+    """
+    try:
+        from datasets import load_dataset  # type: ignore
+    except ImportError as e:
+        raise ImportError(
+            'The `datasets` package is required to download '
+            'HuggingFace datasets. Install with: '
+            'uv pip install datasets'
+        ) from e
+
+    ds = load_dataset(repo_id, split=split, streaming=True)
+
+    rows: list[dict[str, Any]] = []
+    for row in ds:
+        rows.append(dict(row))
+        if max_items is not None and len(rows) >= max_items:
+            break
+
+    return rows
