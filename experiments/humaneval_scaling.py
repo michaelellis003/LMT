@@ -103,40 +103,45 @@ def generate_completions(
     temperature: float = 0.8,
     max_new_tokens: int = MAX_NEW_TOKENS,
 ) -> list[str]:
-    """Generate n completions for a HumanEval prompt."""
+    """Generate n completions for a HumanEval prompt.
+
+    Uses num_return_sequences for batched generation when
+    sampling (n_samples > 1), which is much faster than a
+    sequential loop.
+    """
+    inputs = tokenizer(prompt, return_tensors='pt')
+    input_len = inputs['input_ids'].shape[1]
+
+    with torch.no_grad():
+        if temperature < 0.01:
+            outputs = model.generate(
+                **inputs,
+                max_new_tokens=max_new_tokens,
+                do_sample=False,
+                num_return_sequences=1,
+                pad_token_id=tokenizer.eos_token_id,
+            )
+        else:
+            outputs = model.generate(
+                **inputs,
+                max_new_tokens=max_new_tokens,
+                do_sample=True,
+                temperature=temperature,
+                top_p=0.95,
+                num_return_sequences=n_samples,
+                pad_token_id=tokenizer.eos_token_id,
+            )
+
     completions = []
-    for _ in range(n_samples):
-        inputs = tokenizer(prompt, return_tensors='pt')
-        input_len = inputs['input_ids'].shape[1]
-
-        with torch.no_grad():
-            if temperature < 0.01:
-                # Greedy
-                outputs = model.generate(
-                    **inputs,
-                    max_new_tokens=max_new_tokens,
-                    do_sample=False,
-                    pad_token_id=tokenizer.eos_token_id,
-                )
-            else:
-                outputs = model.generate(
-                    **inputs,
-                    max_new_tokens=max_new_tokens,
-                    do_sample=True,
-                    temperature=temperature,
-                    top_p=0.95,
-                    pad_token_id=tokenizer.eos_token_id,
-                )
-
+    for i in range(outputs.shape[0]):
         completion = tokenizer.decode(
-            outputs[0][input_len:], skip_special_tokens=True
+            outputs[i][input_len:],
+            skip_special_tokens=True,
         )
-
         # Truncate at stop tokens
         for stop in STOP_TOKENS:
             if stop in completion:
                 completion = completion[: completion.index(stop)]
-
         completions.append(completion)
     return completions
 
