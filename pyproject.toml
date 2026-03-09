@@ -38,6 +38,10 @@ docs = [
 eval = [
     "lm-eval>=0.4.8",
 ]
+hf = [
+    "transformers>=4.40",
+    "datasets>=2.18",
+]
 
 [build-system]
 requires = ["hatchling"]
