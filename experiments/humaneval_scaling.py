@@ -41,6 +41,7 @@ except ImportError as e:
 from lmt.eval.code_execution import ExecutionResult, execute_code
 from lmt.eval.pass_at_k import pass_at_k_problems
 from lmt.inference.best_of_n import best_of_n_select
+from lmt.inference.codet import codet_score
 from lmt.inference.consensus import cluster_by_output
 
 # --- Configuration ---
@@ -62,6 +63,8 @@ class ProblemResult:
     best_of_n_reward: float
     consensus_correct: bool
     consensus_reward: float
+    codet_correct: bool
+    codet_reward: float
     n_samples: int
     n_correct_samples: int
     generation_time: float
@@ -229,6 +232,19 @@ def evaluate_problem(
             consensus_code, test_code, timeout=5
         )
 
+    # 5. CodeT scoring (use extracted assertions as gen tests)
+    codet_tests = _extract_assertions(tests, entry_point)
+    if codet_tests and len(sample_codes) >= 2:
+        codet_result = codet_score(sample_codes, codet_tests, timeout=5)
+        codet_exec = run_humaneval_tests(
+            codet_result.best_code, test_code, timeout=5
+        )
+    else:
+        # Fallback to best-of-N
+        codet_exec = run_humaneval_tests(
+            bon_result.best_code, test_code, timeout=5
+        )
+
     elapsed = time.time() - start
 
     n_correct = sum(1 for r in sample_results if r.all_passed)
@@ -241,6 +257,8 @@ def evaluate_problem(
         best_of_n_reward=bon_result.best_reward,
         consensus_correct=consensus_exec.all_passed,
         consensus_reward=consensus_exec.reward,
+        codet_correct=codet_exec.all_passed,
+        codet_reward=codet_exec.reward,
         n_samples=n_samples,
         n_correct_samples=n_correct,
         generation_time=elapsed,
@@ -275,6 +293,25 @@ def _extract_probe_calls(tests: str, entry_point: str) -> list[str]:
             if len(probes) >= 3:
                 break
     return probes
+
+
+def _extract_assertions(
+    tests: str,
+    entry_point: str,
+) -> list[str]:
+    """Extract assert statements from HumanEval test code.
+
+    Returns standalone assertions that can be used as generated
+    tests for CodeT scoring.
+    """
+    assertions = []
+    for line in tests.splitlines():
+        line = line.strip()
+        if line.startswith('assert') and f'{entry_point}(' in line:
+            # Replace candidate() with entry_point()
+            assertion = line.replace('candidate(', f'{entry_point}(')
+            assertions.append(assertion)
+    return assertions
 
 
 def main() -> None:
@@ -318,12 +355,15 @@ def main() -> None:
         )
         result = evaluate_problem(model, tokenizer, problem, args.n_samples)
         results.append(result)
+        g = 'Y' if result.greedy_correct else 'N'
+        b = 'Y' if result.best_of_n_correct else 'N'
+        c = 'Y' if result.consensus_correct else 'N'
+        t = 'Y' if result.codet_correct else 'N'
+        nc = result.n_correct_samples
+        ns = result.n_samples
+        dt = result.generation_time
         status = (
-            f'greedy={"Y" if result.greedy_correct else "N"} '
-            f'bon={"Y" if result.best_of_n_correct else "N"} '
-            f'consensus={"Y" if result.consensus_correct else "N"} '
-            f'({result.n_correct_samples}/{result.n_samples} correct) '
-            f'[{result.generation_time:.1f}s]'
+            f'g={g} bon={b} con={c} codet={t} ({nc}/{ns} correct) [{dt:.1f}s]'
         )
         print(status)
 
@@ -332,6 +372,7 @@ def main() -> None:
     greedy_acc = sum(r.greedy_correct for r in results) / n
     bon_acc = sum(r.best_of_n_correct for r in results) / n
     consensus_acc = sum(r.consensus_correct for r in results) / n
+    codet_acc = sum(r.codet_correct for r in results) / n
 
     # Compute pass@k for different k values
     pass_at_k_data = [(r.n_samples, r.n_correct_samples) for r in results]
@@ -349,6 +390,7 @@ def main() -> None:
     print(f'{"Greedy (pass@1)":<20} {greedy_acc:>10.1%}')
     print(f'{"Best-of-N":<20} {bon_acc:>10.1%}')
     print(f'{"Consensus":<20} {consensus_acc:>10.1%}')
+    print(f'{"CodeT":<20} {codet_acc:>10.1%}')
 
     if args.n_samples >= 5:
         print(f'\n{"Metric":<20} {"Value":>10}')
@@ -368,6 +410,7 @@ def main() -> None:
         'greedy_accuracy': greedy_acc,
         'best_of_n_accuracy': bon_acc,
         'consensus_accuracy': consensus_acc,
+        'codet_accuracy': codet_acc,
         'total_time_seconds': total_time,
         'per_problem': [
             {
@@ -375,6 +418,7 @@ def main() -> None:
                 'greedy_correct': r.greedy_correct,
                 'best_of_n_correct': r.best_of_n_correct,
                 'consensus_correct': r.consensus_correct,
+                'codet_correct': r.codet_correct,
                 'n_correct_samples': r.n_correct_samples,
                 'generation_time': r.generation_time,
             }
