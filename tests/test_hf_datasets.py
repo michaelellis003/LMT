@@ -16,8 +16,15 @@ class TestDownloadGSM8K:
     @pytest.mark.slow
     def test_download_gsm8k_train(self):
         """Should download and format GSM8K train split."""
-        pytest.importorskip('datasets')
-        items = download_gsm8k(split='train', max_items=5)
+        datasets = pytest.importorskip('datasets')
+        try:
+            items = download_gsm8k(split='train', max_items=5)
+        except (
+            datasets.exceptions.DatasetNotFoundError,
+            ConnectionError,
+            OSError,
+        ):
+            pytest.skip('GSM8K dataset not accessible')
         assert len(items) == 5
         assert all(isinstance(i, MathDataItem) for i in items)
         assert all(i.prompt for i in items)
@@ -26,8 +33,15 @@ class TestDownloadGSM8K:
     @pytest.mark.slow
     def test_download_gsm8k_test(self):
         """Should download and format GSM8K test split."""
-        pytest.importorskip('datasets')
-        items = download_gsm8k(split='test', max_items=3)
+        datasets = pytest.importorskip('datasets')
+        try:
+            items = download_gsm8k(split='test', max_items=3)
+        except (
+            datasets.exceptions.DatasetNotFoundError,
+            ConnectionError,
+            OSError,
+        ):
+            pytest.skip('GSM8K dataset not accessible')
         assert len(items) == 3
 
     def test_download_gsm8k_mock(self):
@@ -54,8 +68,11 @@ class TestDownloadMATH:
     @pytest.mark.slow
     def test_download_math(self):
         """Should download and format MATH dataset."""
-        pytest.importorskip('datasets')
-        items = download_math(split='test', max_items=3)
+        datasets = pytest.importorskip('datasets')
+        try:
+            items = download_math(split='test', max_items=3)
+        except datasets.exceptions.DatasetNotFoundError:
+            pytest.skip('MATH dataset not accessible')
         assert len(items) <= 3
         assert all(isinstance(i, MathDataItem) for i in items)
 
@@ -78,10 +95,17 @@ class TestDownloadHumanEval:
     @pytest.mark.slow
     def test_download_humaneval(self):
         """Should download and format HumanEval."""
-        pytest.importorskip('datasets')
+        datasets = pytest.importorskip('datasets')
         from lmt.data.code_data import CodeDataItem
 
-        items = download_humaneval(max_items=3)
+        try:
+            items = download_humaneval(max_items=3)
+        except (
+            datasets.exceptions.DatasetNotFoundError,
+            ConnectionError,
+            OSError,
+        ):
+            pytest.skip('HumanEval dataset not accessible')
         assert len(items) == 3
         assert all(isinstance(i, CodeDataItem) for i in items)
         assert all(i.tests for i in items)
