@@ -176,19 +176,18 @@ def run_dry_run() -> None:
 
 
 def run_training(args: argparse.Namespace) -> None:
-    """Set up experiment config for GRPO math reasoning training.
+    """Run full GRPO math reasoning training.
 
-    .. note::
-
-        This is a **placeholder** that saves the experiment config
-        and prints the planned training parameters. Actual training
-        requires GPU access and pretrained model weights (loaded via
-        HuggingFace). Use ``--dry_run`` to validate the pipeline on CPU.
+    Downloads a pretrained model from HuggingFace Hub, loads GSM8K
+    data, and trains with binary math rewards.
 
     Args:
         args: Parsed command-line arguments.
     """
     set_seed(args.seed)
+
+    output_dir = Path(args.output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     # Log experiment config
     exp_config = ExperimentConfig(
@@ -196,24 +195,97 @@ def run_training(args: argparse.Namespace) -> None:
         model_type='qwen3',
         description=f'GRPO math reasoning, {args.train_steps} steps',
     )
-
-    output_dir = Path(args.output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
     exp_config.save(str(output_dir / 'experiment_config.json'))
 
-    print(f'Experiment config saved to {output_dir}/experiment_config.json')
-    print(f'Config: {json.dumps(exp_config.to_dict(), indent=2)}')
+    # Determine device
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    dtype = torch.bfloat16 if device == 'cuda' else torch.float32
+    print(f'Device: {device}, dtype: {dtype}')
 
-    # TODO: Load pretrained model from HuggingFace
-    # from lmt.models.hf_loader import config_from_hf, load_hf_state_dict
-    # For now, this is a placeholder for when GPU + model access is available
-    print(
-        f'\nWould load model from: {args.model_path}'
-        f'\nWould train for {args.train_steps} steps'
-        f'\nWould save to: {args.output_dir}'
+    # Load pretrained model from HuggingFace
+    from lmt.models.hf_loader import load_from_hub
+
+    print(f'Loading model from {args.model_path}...')
+    model = load_from_hub(
+        args.model_path,
+        device=device,
+        dtype=dtype,
+        context_length=args.context_length,
     )
-    print('\nFull training requires GPU + pretrained model weights.')
-    print('Use --dry_run to validate the pipeline on CPU.')
+    n_params = sum(p.numel() for p in model.parameters())
+    print(f'Model loaded: {n_params:,} parameters')
+
+    # Load tokenizer
+    from lmt.tokenizer.hf_tokenizer import HFTokenizerWrapper
+
+    tokenizer = HFTokenizerWrapper.from_pretrained(args.model_path)
+
+    # Load GSM8K data
+    from datasets import load_dataset  # type: ignore
+
+    print('Loading GSM8K dataset...')
+    ds = load_dataset('openai/gsm8k', 'main', split='train', streaming=True)
+    rows = [row for i, row in enumerate(ds) if i < args.train_steps]
+    items = load_math_items(rows, dataset_format='gsm8k', format_prompts=True)
+    print(f'Loaded {len(items)} training problems')
+
+    # Set up GRPO trainer
+    grpo_config = GRPOConfig(
+        group_size=args.group_size,
+        max_response_len=args.max_response_len,
+        clip_eps=0.2,
+        kl_coeff=0.0,  # No KL penalty (Raschka's finding)
+        lr=args.lr,
+        temperature=1.0,
+        device=device,
+    )
+
+    trainer = GRPOTrainer(model, grpo_config)
+
+    # Training loop
+    print(f'Starting GRPO training for {len(items)} steps...')
+    losses = []
+    for step, item in enumerate(items):
+        reward_fn = create_math_reward_fn(item, tokenizer)
+        prompt_ids = torch.tensor(
+            tokenizer.encode(item.prompt), dtype=torch.long
+        )
+        # Truncate prompt to leave room for response
+        max_prompt = args.context_length - args.max_response_len
+        prompt_ids = prompt_ids[:max_prompt]
+
+        loss = trainer.train_step(prompt_ids, reward_fn)
+        losses.append(loss)
+
+        if step % 10 == 0 or step == len(items) - 1:
+            avg_loss = sum(losses[-10:]) / min(10, len(losses))
+            print(
+                f'  Step {step}/{len(items)}: '
+                f'loss={loss:.4f} avg_loss={avg_loss:.4f}'
+            )
+
+    # Save final model
+    from lmt.models.hf_loader import save_as_safetensors
+
+    save_path = str(output_dir / 'model.safetensors')
+    save_as_safetensors(model, save_path)
+    print(f'Model saved to {save_path}')
+
+    # Save training log
+    log = {
+        'losses': losses,
+        'config': exp_config.to_dict(),
+        'grpo_config': {
+            'group_size': grpo_config.group_size,
+            'max_response_len': grpo_config.max_response_len,
+            'lr': grpo_config.lr,
+            'kl_coeff': grpo_config.kl_coeff,
+        },
+    }
+    log_path = output_dir / 'training_log.json'
+    with open(log_path, 'w') as f:
+        json.dump(log, f, indent=2)
+    print(f'Training log saved to {log_path}')
 
 
 def main() -> None:
@@ -246,6 +318,30 @@ def main() -> None:
         type=int,
         default=42,
         help='Random seed for reproducibility',
+    )
+    parser.add_argument(
+        '--group_size',
+        type=int,
+        default=8,
+        help='GRPO group size (responses per prompt)',
+    )
+    parser.add_argument(
+        '--max_response_len',
+        type=int,
+        default=256,
+        help='Maximum response length in tokens',
+    )
+    parser.add_argument(
+        '--context_length',
+        type=int,
+        default=2048,
+        help='Context length for model (override HF default)',
+    )
+    parser.add_argument(
+        '--lr',
+        type=float,
+        default=5e-6,
+        help='Learning rate',
     )
     parser.add_argument(
         '--dry_run',
