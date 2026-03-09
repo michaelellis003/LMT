@@ -159,6 +159,15 @@ class TestGRPOWithMathReward:
         assert all(isinstance(v, float) for v in losses)
 
 
+try:
+    import datasets as _datasets  # noqa: F401
+
+    _has_datasets = True
+except ImportError:
+    _has_datasets = False
+
+
+@pytest.mark.skipif(not _has_datasets, reason='datasets not installed')
 class TestRealGSM8KLoading:
     """Integration tests with real GSM8K data from HuggingFace."""
 
