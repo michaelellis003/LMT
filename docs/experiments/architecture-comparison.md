@@ -47,6 +47,8 @@ which is the theoretical optimum for uniform random bytes
 
 **Total spread: 0.0023 BPB (<0.03%)** -- effectively zero.
 
+<div class="exp-chart" data-experiment="arch-comparison-random"></div>
+
 !!! info "Why this matters"
     This is the **control experiment**. It establishes that our training
     infrastructure treats all architectures fairly. Any differences we see
@@ -72,6 +74,8 @@ simple (no tokenizer effects).
 
 **BPB spread: 0.542 (16.6%)** -- architecture choice causes a >15%
 difference in compression quality on real data.
+
+<div class="exp-chart" data-experiment="arch-comparison-wikitext"></div>
 
 ### Key Findings
 
