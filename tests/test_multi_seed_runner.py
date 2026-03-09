@@ -7,7 +7,9 @@ from lmt.research.multi_seed import (
     MultiSeedConfig,
     MultiSeedResult,
     SeedResult,
+    compare_variants,
     run_multi_seed,
+    screen_then_confirm,
 )
 from lmt.research.stats import ExperimentSamples, bayesian_compare
 
@@ -140,3 +142,77 @@ class TestRunMultiSeed:
         # Good model should be clearly better (lower BPB)
         assert comparison.prob_a_better > 0.9
         assert comparison.mean_difference < 0
+
+
+class TestCompareVariants:
+    """Test compare_variants convenience function."""
+
+    def test_compare_variants(self):
+        """Should produce a BayesianComparison from two results."""
+
+        def model_a(seed: int) -> float:
+            torch.manual_seed(seed)
+            return 3.0 + torch.randn(1).item() * 0.05
+
+        def model_b(seed: int) -> float:
+            torch.manual_seed(seed)
+            return 3.5 + torch.randn(1).item() * 0.05
+
+        config = MultiSeedConfig(n_seeds=5, seeds=[42, 43, 44, 45, 46])
+        result_a = run_multi_seed('a', model_a, config)
+        result_b = run_multi_seed('b', model_b, config)
+
+        comparison = compare_variants(result_a, result_b, rope=0.01)
+        assert comparison.prob_a_better > 0.9
+        assert comparison.rope == 0.01
+
+
+class TestScreenThenConfirm:
+    """Test two-stage screening protocol."""
+
+    def test_detects_large_effect(self):
+        """Should confirm a large effect (proceed to Phase 2)."""
+
+        def good(seed: int) -> float:
+            torch.manual_seed(seed)
+            return 3.0 + torch.randn(1).item() * 0.05
+
+        def bad(seed: int) -> float:
+            torch.manual_seed(seed)
+            return 3.5 + torch.randn(1).item() * 0.05
+
+        result = screen_then_confirm(
+            'good',
+            'bad',
+            good,
+            bad,
+            rope=0.01,
+            screen_seeds=3,
+            confirm_seeds=5,
+        )
+        # Should survive screening and return a comparison
+        assert result is not None
+        assert result.prob_a_better > 0.9
+
+    def test_rejects_no_effect(self):
+        """Should stop at Phase 1 when there's no real difference."""
+
+        def same_a(seed: int) -> float:
+            torch.manual_seed(seed)
+            return 3.0 + torch.randn(1).item() * 0.05
+
+        def same_b(seed: int) -> float:
+            torch.manual_seed(seed + 1000)
+            return 3.0 + torch.randn(1).item() * 0.05
+
+        result = screen_then_confirm(
+            'a',
+            'b',
+            same_a,
+            same_b,
+            rope=0.01,
+            screen_seeds=5,
+            confirm_seeds=10,
+        )
+        # Should stop at screening — no detectable difference
+        assert result is None

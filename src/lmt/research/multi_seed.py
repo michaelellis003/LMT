@@ -1,4 +1,4 @@
-"""Multi-seed experiment runner for statistically rigorous comparisons.
+r"""Multi-seed experiment runner for statistically rigorous comparisons.
 
 Runs the same experiment configuration across multiple random seeds,
 collects per-seed metrics, and integrates with the Bayesian comparison
@@ -8,23 +8,24 @@ The key insight: a single-seed result tells you nothing about whether
 a difference is real or just due to random initialization. With 5+
 seeds, you can compute posterior probabilities like P(A < B) = 0.95.
 
+Two-stage protocol (per Colas et al. 2018):
+    Phase 1 -- Screening (5 seeds): quick keep/discard
+    Phase 2 -- Confirmation (10 seeds): Bayesian comparison with ROPE
+
 Usage::
 
     from lmt.research.multi_seed import (
         MultiSeedConfig,
         run_multi_seed,
+        compare_variants,
     )
-    from lmt.research.stats import bayesian_compare
 
-    config = MultiSeedConfig(n_seeds=5)
+    config = MultiSeedConfig(n_seeds=10)
 
     result_a = run_multi_seed('llama', train_llama, config)
     result_b = run_multi_seed('gpt', train_gpt, config)
 
-    comparison = bayesian_compare(
-        result_a.to_samples(),
-        result_b.to_samples(),
-    )
+    comparison = compare_variants(result_a, result_b, rope=0.01)
     print(comparison.interpretation)
 """
 
@@ -34,7 +35,11 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
-from lmt.research.stats import ExperimentSamples
+from lmt.research.stats import (
+    BayesianComparison,
+    ExperimentSamples,
+    bayesian_compare,
+)
 
 # Default seeds chosen to be spread across the int range
 # to minimize correlation between initializations
@@ -165,3 +170,111 @@ def run_multi_seed(
     )
 
     return result
+
+
+def compare_variants(
+    a: MultiSeedResult,
+    b: MultiSeedResult,
+    rope: float = 0.0,
+    n_mc_samples: int = 50000,
+) -> BayesianComparison:
+    """Compare two multi-seed results using Bayesian inference.
+
+    Convenience wrapper that converts MultiSeedResults to
+    ExperimentSamples and runs bayesian_compare.
+
+    Args:
+        a: Results from variant A.
+        b: Results from variant B.
+        rope: Region of practical equivalence half-width.
+        n_mc_samples: Monte Carlo samples for posterior.
+
+    Returns:
+        BayesianComparison with probabilities and intervals.
+    """
+    return bayesian_compare(
+        a.to_samples(),
+        b.to_samples(),
+        n_mc_samples=n_mc_samples,
+        rope=rope,
+    )
+
+
+def screen_then_confirm(
+    name_a: str,
+    name_b: str,
+    train_fn_a: Callable[[int], float],
+    train_fn_b: Callable[[int], float],
+    rope: float = 0.01,
+    screen_seeds: int = 5,
+    confirm_seeds: int = 10,
+) -> BayesianComparison | None:
+    """Two-stage protocol: screen with few seeds, confirm if promising.
+
+    Phase 1 (screening): Run both variants with screen_seeds seeds.
+    If the mean difference is less than the pooled std, declare
+    "no detectable difference" and return None (saves compute).
+
+    Phase 2 (confirmation): Run additional seeds up to confirm_seeds
+    total. Run full Bayesian comparison with ROPE.
+
+    Based on Colas et al. (2018) power analysis recommendations.
+
+    Args:
+        name_a: Name of variant A.
+        name_b: Name of variant B.
+        train_fn_a: Training function for variant A.
+        train_fn_b: Training function for variant B.
+        rope: ROPE half-width for Bayesian comparison.
+        screen_seeds: Seeds for Phase 1 screening.
+        confirm_seeds: Total seeds for Phase 2 confirmation.
+
+    Returns:
+        BayesianComparison if the effect survived screening,
+        None if the effect was too small to detect.
+    """
+    # Phase 1: Screening
+    print(f'\n=== Phase 1: Screening ({screen_seeds} seeds) ===')
+    screen_config = MultiSeedConfig(n_seeds=screen_seeds)
+    result_a = run_multi_seed(name_a, train_fn_a, screen_config)
+    result_b = run_multi_seed(name_b, train_fn_b, screen_config)
+
+    # Check if effect is detectable above noise
+    mean_diff = abs(result_a.mean_bpb - result_b.mean_bpb)
+    pooled_std = ((result_a.std_bpb**2 + result_b.std_bpb**2) / 2) ** 0.5
+
+    if pooled_std > 0 and mean_diff < pooled_std:
+        print(
+            f'\n  Screening: |diff|={mean_diff:.4f} < '
+            f'pooled_std={pooled_std:.4f}'
+        )
+        print('  Effect too small to detect. Stopping.')
+        return None
+
+    # Phase 2: Confirmation with more seeds
+    extra_seeds = confirm_seeds - screen_seeds
+    if extra_seeds > 0:
+        print(f'\n=== Phase 2: Confirmation (+{extra_seeds} seeds) ===')
+        extra_config = MultiSeedConfig(
+            n_seeds=extra_seeds,
+            seeds=_DEFAULT_SEEDS[screen_seeds:confirm_seeds],
+        )
+        extra_a = run_multi_seed(name_a, train_fn_a, extra_config)
+        extra_b = run_multi_seed(name_b, train_fn_b, extra_config)
+
+        # Merge results
+        all_a = MultiSeedResult(
+            variant_name=name_a,
+            seed_results=result_a.seed_results + extra_a.seed_results,
+        )
+        all_b = MultiSeedResult(
+            variant_name=name_b,
+            seed_results=result_b.seed_results + extra_b.seed_results,
+        )
+    else:
+        all_a = result_a
+        all_b = result_b
+
+    comparison = compare_variants(all_a, all_b, rope=rope)
+    print(f'\n  Result: {comparison.interpretation}')
+    return comparison
