@@ -92,12 +92,7 @@ capacity from sparse experts.
 
 ## API Reference
 
-::: lmt.models.deepseek.DeepSeekV2
-    options:
-      show_source: true
-      members:
-        - __init__
-        - forward
+See the full API docs at [Models API](../api/models.md#deepseek-v2).
 
 ## References
 
