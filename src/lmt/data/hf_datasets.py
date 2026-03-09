@@ -109,6 +109,45 @@ def download_humaneval(
     )
 
 
+def download_wikitext2(
+    split: str = 'train',
+    max_items: int | None = None,
+    filter_empty: bool = True,
+    rows: list[dict[str, Any]] | None = None,
+) -> list[str]:
+    """Download WikiText-2 dataset as raw text paragraphs.
+
+    WikiText-2 is a standard language modeling benchmark with ~2M tokens
+    from Wikipedia articles. Useful for pretraining evaluation and
+    architecture comparison experiments.
+
+    Args:
+        split: Dataset split (``'train'``, ``'test'``, ``'validation'``).
+        max_items: Maximum text lines to return. None = all.
+        filter_empty: If True (default), filter out empty/whitespace-only
+            lines. WikiText-2 has many blank separator lines.
+        rows: Pre-loaded rows (skips download if provided).
+
+    Returns:
+        List of non-empty text strings from WikiText-2.
+    """
+    if rows is None:
+        rows = _download_hf_rows(
+            'Salesforce/wikitext', 'wikitext-2-raw-v1', split, None
+        )
+
+    texts: list[str] = []
+    for row in rows:
+        text = row.get('text', '')
+        if filter_empty and not text.strip():
+            continue
+        texts.append(text)
+        if max_items is not None and len(texts) >= max_items:
+            break
+
+    return texts
+
+
 def _download_hf_rows(
     repo_id: str,
     config_name: str | None,
