@@ -57,6 +57,7 @@ extra_javascript:
   - javascripts/pos-encoding-compare.js
   - javascripts/tokenizer-viz.js
   - javascripts/experiment-charts.js
+  - javascripts/arch-explorer.js
 
 plugins:
   - search
@@ -104,6 +105,7 @@ nav:
       - RoPE Explorer: visualizations/rope-explorer.md
       - Positional Encoding: visualizations/positional-encoding.md
       - Tokenizer Comparison: visualizations/tokenizer-comparison.md
+      - Architecture Explorer: visualizations/architecture-explorer.md
   - API Reference:
       - Layers: api/layers.md
       - Models: api/models.md
