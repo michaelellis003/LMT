@@ -4,6 +4,7 @@ Validates the wiring between math data loading, reward functions,
 and the GRPO trainer. Uses tiny models and mock data.
 """
 
+import pytest
 import torch
 
 from lmt.models.config import ModelConfig
@@ -156,3 +157,58 @@ class TestGRPOWithMathReward:
 
         assert len(losses) == 3
         assert all(isinstance(v, float) for v in losses)
+
+
+class TestRealGSM8KLoading:
+    """Integration tests with real GSM8K data from HuggingFace."""
+
+    @pytest.mark.slow
+    def test_load_gsm8k_from_hub(self):
+        """Load GSM8K from HuggingFace and parse into MathDataItems."""
+        from datasets import load_dataset
+
+        from lmt.data.math_data import load_math_items
+
+        ds = load_dataset(
+            'openai/gsm8k', 'main', split='train', streaming=True
+        )
+        # Take first 10 rows
+        rows = [row for i, row in enumerate(ds) if i < 10]
+
+        items = load_math_items(rows, dataset_format='gsm8k')
+        assert len(items) == 10
+        # All should have non-empty prompts and ground truths
+        for item in items:
+            assert len(item.prompt) > 0
+            assert len(item.ground_truth) > 0
+
+    @pytest.mark.slow
+    def test_gsm8k_reward_integration(self):
+        """Real GSM8K items should work with the reward pipeline."""
+        from datasets import load_dataset
+
+        from lmt.data.math_data import load_math_items
+        from lmt.training.rewards import math_reward
+
+        ds = load_dataset(
+            'openai/gsm8k', 'main', split='train', streaming=True
+        )
+        rows = [row for i, row in enumerate(ds) if i < 5]
+        items = load_math_items(rows, dataset_format='gsm8k')
+
+        # Correct answer should get reward 1.0
+        item = items[0]
+        reward = math_reward(
+            prompt=item.prompt,
+            response=f'\\boxed{{{item.ground_truth}}}',
+            ground_truth=item.ground_truth,
+        )
+        assert reward == 1.0
+
+        # Wrong answer should get reward 0.0
+        wrong_reward = math_reward(
+            prompt=item.prompt,
+            response='\\boxed{99999}',
+            ground_truth=item.ground_truth,
+        )
+        assert wrong_reward == 0.0
