@@ -13,10 +13,8 @@ Usage::
 """
 
 import torch
-import torch.nn as nn
 from torch.nn import functional as f
 
-from lmt.layers.blocks.configurable_block import BlockConfig
 from lmt.models.base import BaseModel
 from lmt.models.config import ModelConfig
 from lmt.training.muon import Muon
@@ -59,16 +57,12 @@ def train_with_optimizer(
         hidden_params = [
             p
             for n, p in model.named_parameters()
-            if p.ndim >= 2
-            and 'tok_embed' not in n
-            and 'out_head' not in n
+            if p.ndim >= 2 and 'tok_embed' not in n and 'out_head' not in n
         ]
         other_params = [
             p
             for n, p in model.named_parameters()
-            if p.ndim < 2
-            or 'tok_embed' in n
-            or 'out_head' in n
+            if p.ndim < 2 or 'tok_embed' in n or 'out_head' in n
         ]
         muon_opt = Muon(hidden_params, lr=0.02)
         adam_opt = torch.optim.AdamW(other_params, lr=3e-4)
@@ -79,7 +73,7 @@ def train_with_optimizer(
     model.train()
     losses = []
 
-    for step in range(train_steps):
+    for _step in range(train_steps):
         # Sample batch
         indices = torch.randint(0, len(data), (batch_size,))
         batch = data[indices]
@@ -144,7 +138,7 @@ def main() -> None:
     print(f'  Muon:  {muon_final:.4f}')
     print(f'  Diff:  {abs(adamw_final - muon_final):.4f}')
     print()
-    print(f'Average loss at step 50 (early convergence):')
+    print('Average loss at step 50 (early convergence):')
     print(f'  AdamW: {adamw_early:.4f}')
     print(f'  Muon:  {muon_early:.4f}')
     print()
