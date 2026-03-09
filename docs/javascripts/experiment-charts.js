@@ -70,6 +70,20 @@
         { label: 'GPT+SwiGLU', value: 3.617 },
       ],
     },
+    'pairwise-ablation': {
+      title: 'Pairwise Ablation — WikiText-2',
+      ylabel: 'Best BPB (lower is better)',
+      data: [
+        { label: 'RoPE+GQA', value: 3.140 },
+        { label: 'LLaMA\n(full)', value: 3.226 },
+        { label: 'GQA+\nRMSNorm', value: 3.585 },
+        { label: 'RoPE+\nRMSNorm', value: 3.594 },
+        { label: 'SwiGLU+\nGQA', value: 3.596 },
+        { label: 'GPT', value: 3.602 },
+        { label: 'RoPE+\nSwiGLU', value: 3.613 },
+        { label: 'SwiGLU+\nRMSNorm', value: 3.619 },
+      ],
+    },
     'babylm-results': {
       title: 'BabyLM Pretraining — BPB',
       ylabel: 'BPB',
