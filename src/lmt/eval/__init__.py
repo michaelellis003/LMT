@@ -1,1 +1,1 @@
-"""Evaluation metrics for language models."""
+"""Evaluation metrics and benchmarking for language models."""
