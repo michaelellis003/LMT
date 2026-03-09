@@ -56,7 +56,9 @@ class HFTokenizerWrapper(BaseTokenizer):
             HFTokenizerWrapper instance.
         """
         try:
-            from transformers import AutoTokenizer
+            from transformers import (
+                AutoTokenizer,  # type: ignore[import-not-found]
+            )
         except ImportError as e:
             raise ImportError(
                 'transformers is required for HF tokenizer support. '
