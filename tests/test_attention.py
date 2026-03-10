@@ -7,6 +7,8 @@ import torch
 import torch.nn as nn
 
 from lmt.layers.attention import MultiHeadAttention
+from lmt.layers.attention.grouped_query_attention import GroupedQueryAttention
+from lmt.layers.positional import ALiBi, RoPE
 from lmt.models.config import ModelConfig, ModelConfigPresets
 
 
@@ -253,3 +255,217 @@ class TestMultiHeadAttention:
 
         actual_params = sum(p.numel() for p in attn.parameters())
         assert actual_params == expected_params
+
+
+class TestMHARoPE:
+    """Test MHA with RoPE positional encoding."""
+
+    @pytest.fixture()
+    def config(self) -> ModelConfig:
+        """Small config for MHA + RoPE tests."""
+        return ModelConfig(
+            embed_dim=64,
+            num_heads=4,
+            context_length=32,
+            vocab_size=100,
+            num_layers=2,
+            qkv_bias=False,
+        )
+
+    @pytest.fixture()
+    def rope(self, config: ModelConfig) -> RoPE:
+        """RoPE instance matching config."""
+        head_dim = config.embed_dim // config.num_heads
+        return RoPE(d_model=head_dim, max_seq_len=config.context_length)
+
+    def test_mha_accepts_rope(self, config: ModelConfig, rope: RoPE) -> None:
+        """MHA should accept an optional rope parameter."""
+        attn = MultiHeadAttention(config, rope=rope)
+        assert attn.rope is rope
+
+    def test_mha_rope_forward_shape(
+        self, config: ModelConfig, rope: RoPE
+    ) -> None:
+        """MHA with RoPE preserves input shape."""
+        attn = MultiHeadAttention(config, rope=rope)
+        x = torch.randn(2, 8, config.embed_dim)
+        out = attn(x)
+        assert out.shape == x.shape
+
+    def test_mha_rope_changes_output(
+        self, config: ModelConfig, rope: RoPE
+    ) -> None:
+        """MHA with vs without RoPE should produce different outputs."""
+        torch.manual_seed(42)
+        attn_no_rope = MultiHeadAttention(config)
+        torch.manual_seed(42)
+        attn_rope = MultiHeadAttention(config, rope=rope)
+
+        x = torch.randn(1, 8, config.embed_dim)
+        with torch.no_grad():
+            out_no = attn_no_rope(x)
+            out_yes = attn_rope(x)
+
+        # Outputs should differ (RoPE rotates Q/K)
+        assert not torch.allclose(out_no, out_yes, atol=1e-5)
+
+    def test_mha_rope_gradient_flow(
+        self, config: ModelConfig, rope: RoPE
+    ) -> None:
+        """Gradients flow through MHA + RoPE."""
+        attn = MultiHeadAttention(config, rope=rope)
+        x = torch.randn(2, 8, config.embed_dim, requires_grad=True)
+        out = attn(x)
+        out.sum().backward()
+        assert x.grad is not None
+        assert not torch.isnan(x.grad).any()
+        for name, p in attn.named_parameters():
+            if p.requires_grad:
+                assert p.grad is not None, f'No gradient for {name}'
+
+    def test_mha_rope_none_is_default(self, config: ModelConfig) -> None:
+        """MHA without rope argument behaves as before."""
+        attn = MultiHeadAttention(config)
+        assert attn.rope is None
+
+
+class TestMHAALiBi:
+    """Test MHA with ALiBi positional encoding."""
+
+    @pytest.fixture()
+    def config(self) -> ModelConfig:
+        """Small config for MHA + ALiBi tests."""
+        return ModelConfig(
+            embed_dim=64,
+            num_heads=4,
+            context_length=32,
+            vocab_size=100,
+            num_layers=2,
+            qkv_bias=False,
+        )
+
+    @pytest.fixture()
+    def alibi(self, config: ModelConfig) -> ALiBi:
+        """ALiBi instance matching config."""
+        return ALiBi(
+            num_heads=config.num_heads,
+            max_seq_len=config.context_length,
+        )
+
+    def test_mha_accepts_alibi(
+        self, config: ModelConfig, alibi: ALiBi
+    ) -> None:
+        """MHA should accept an optional alibi parameter."""
+        attn = MultiHeadAttention(config, alibi=alibi)
+        assert attn.alibi is alibi
+
+    def test_mha_alibi_forward_shape(
+        self, config: ModelConfig, alibi: ALiBi
+    ) -> None:
+        """MHA with ALiBi preserves input shape."""
+        attn = MultiHeadAttention(config, alibi=alibi)
+        x = torch.randn(2, 8, config.embed_dim)
+        out = attn(x)
+        assert out.shape == x.shape
+
+    def test_mha_alibi_changes_output(
+        self, config: ModelConfig, alibi: ALiBi
+    ) -> None:
+        """MHA with vs without ALiBi should differ."""
+        torch.manual_seed(42)
+        attn_no = MultiHeadAttention(config)
+        torch.manual_seed(42)
+        attn_ali = MultiHeadAttention(config, alibi=alibi)
+
+        x = torch.randn(1, 8, config.embed_dim)
+        with torch.no_grad():
+            out_no = attn_no(x)
+            out_ali = attn_ali(x)
+        assert not torch.allclose(out_no, out_ali, atol=1e-5)
+
+    def test_mha_alibi_gradient_flow(
+        self, config: ModelConfig, alibi: ALiBi
+    ) -> None:
+        """Gradients flow through MHA + ALiBi."""
+        attn = MultiHeadAttention(config, alibi=alibi)
+        x = torch.randn(2, 8, config.embed_dim, requires_grad=True)
+        out = attn(x)
+        out.sum().backward()
+        assert x.grad is not None
+        for name, p in attn.named_parameters():
+            if p.requires_grad:
+                assert p.grad is not None, f'No gradient for {name}'
+
+
+class TestGQAALiBi:
+    """Test GQA with ALiBi positional encoding."""
+
+    @pytest.fixture()
+    def config(self) -> ModelConfig:
+        """Small config for GQA + ALiBi tests."""
+        return ModelConfig(
+            embed_dim=64,
+            num_heads=4,
+            num_kv_heads=2,
+            context_length=32,
+            vocab_size=100,
+            num_layers=2,
+        )
+
+    @pytest.fixture()
+    def alibi(self, config: ModelConfig) -> ALiBi:
+        """ALiBi instance matching config."""
+        return ALiBi(
+            num_heads=config.num_heads,
+            max_seq_len=config.context_length,
+        )
+
+    def test_gqa_accepts_alibi(
+        self, config: ModelConfig, alibi: ALiBi
+    ) -> None:
+        """GQA should accept an optional alibi parameter."""
+        attn = GroupedQueryAttention(config, alibi=alibi)
+        assert attn.alibi is alibi
+
+    def test_gqa_alibi_forward_shape(
+        self, config: ModelConfig, alibi: ALiBi
+    ) -> None:
+        """GQA with ALiBi preserves input shape."""
+        attn = GroupedQueryAttention(config, alibi=alibi)
+        x = torch.randn(2, 8, config.embed_dim)
+        out = attn(x)
+        assert out.shape == x.shape
+
+    def test_gqa_alibi_changes_output(
+        self, config: ModelConfig, alibi: ALiBi
+    ) -> None:
+        """GQA with vs without ALiBi should differ."""
+        torch.manual_seed(42)
+        attn_no = GroupedQueryAttention(config)
+        torch.manual_seed(42)
+        attn_ali = GroupedQueryAttention(config, alibi=alibi)
+
+        x = torch.randn(1, 8, config.embed_dim)
+        with torch.no_grad():
+            out_no = attn_no(x)
+            out_ali = attn_ali(x)
+        assert not torch.allclose(out_no, out_ali, atol=1e-5)
+
+    def test_gqa_rope_and_alibi_exclusive(
+        self, config: ModelConfig, alibi: ALiBi
+    ) -> None:
+        """GQA should reject both rope and alibi simultaneously."""
+        head_dim = config.embed_dim // config.num_heads
+        rope = RoPE(d_model=head_dim, max_seq_len=config.context_length)
+        with pytest.raises(ValueError, match='rope.*alibi'):
+            GroupedQueryAttention(config, rope=rope, alibi=alibi)
+
+    def test_gqa_alibi_gradient_flow(
+        self, config: ModelConfig, alibi: ALiBi
+    ) -> None:
+        """Gradients flow through GQA + ALiBi."""
+        attn = GroupedQueryAttention(config, alibi=alibi)
+        x = torch.randn(2, 8, config.embed_dim, requires_grad=True)
+        out = attn(x)
+        out.sum().backward()
+        assert x.grad is not None

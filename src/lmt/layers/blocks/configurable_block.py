@@ -29,7 +29,7 @@ from lmt.layers.normalization import NORM_REGISTRY
 from lmt.models.config import ModelConfig
 
 if TYPE_CHECKING:
-    from lmt.layers.positional import RoPE
+    from lmt.layers.positional import ALiBi, RoPE
 
 
 @dataclass
@@ -44,6 +44,7 @@ class BlockConfig:
         moe_top_k: Experts per token (only used if ffn='moe').
         moe_shared_experts: Always-active experts (only if ffn='moe').
         rope: Optional RoPE instance for attention layers that support it.
+        alibi: Optional ALiBi instance for attention bias.
         window_size: Optional sliding window size for GQA.
     """
 
@@ -54,6 +55,7 @@ class BlockConfig:
     moe_top_k: int = 2
     moe_shared_experts: int = 0
     rope: RoPE | None = field(default=None, repr=False)
+    alibi: ALiBi | None = field(default=None, repr=False)
     window_size: int | None = None
 
 
@@ -108,11 +110,16 @@ class ConfigurableBlock(nn.Module):
         key = block_config.attention
 
         if key == 'mha':
-            return MultiHeadAttention(model_config)
+            return MultiHeadAttention(
+                model_config,
+                rope=block_config.rope,
+                alibi=block_config.alibi,
+            )
         elif key == 'gqa':
             return GroupedQueryAttention(
                 model_config,
                 rope=block_config.rope,
+                alibi=block_config.alibi,
                 window_size=block_config.window_size,
             )
         elif key == 'sliding_window':
