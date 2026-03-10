@@ -5,6 +5,8 @@ on the HumanEval benchmark. Compares:
 1. Greedy baseline (pass@1)
 2. Best-of-N with execution filtering
 3. Consensus voting
+4. CodeT dual execution scoring
+5. Self-repair (retry with structured error feedback)
 
 Uses Qwen2.5-Coder-0.5B-Instruct as the base model (~494M params).
 
@@ -65,6 +67,9 @@ class ProblemResult:
     consensus_reward: float
     codet_correct: bool
     codet_reward: float
+    repair_correct: bool
+    repair_reward: float
+    repair_attempts: int
     n_samples: int
     n_correct_samples: int
     generation_time: float
@@ -247,6 +252,16 @@ def evaluate_problem(
             bon_result.best_code, test_code, timeout=5
         )
 
+    # 6. Self-repair (retry with structured error feedback)
+    repair_passed, repair_reward, repair_attempts = self_repair_strategy(
+        model,
+        tokenizer,
+        prompt,
+        test_code,
+        max_retries=3,
+        temperature=0.7,
+    )
+
     elapsed = time.time() - start
 
     n_correct = sum(1 for r in sample_results if r.all_passed)
@@ -261,6 +276,9 @@ def evaluate_problem(
         consensus_reward=consensus_exec.reward,
         codet_correct=codet_exec.all_passed,
         codet_reward=codet_exec.reward,
+        repair_correct=repair_passed,
+        repair_reward=repair_reward,
+        repair_attempts=repair_attempts,
         n_samples=n_samples,
         n_correct_samples=n_correct,
         generation_time=elapsed,
@@ -316,6 +334,99 @@ def _extract_assertions(
     return assertions
 
 
+def _build_repair_prompt(
+    prompt: str,
+    code: str,
+    stderr: str,
+    timed_out: bool,
+) -> str:
+    """Build structured error prompt for self-repair retry.
+
+    Provides the model with the original problem, the failed code,
+    and a concise description of what went wrong.
+    """
+    parts = [prompt.rstrip(), '', '# Previous attempt:', '']
+    parts.append(f'```python\n{code}\n```')
+    parts.append('')
+
+    if timed_out:
+        parts.append('# Error: Code timed out (possible infinite loop).')
+    elif stderr:
+        # Take first 200 chars of error to stay concise
+        err_msg = stderr.strip()[:200]
+        parts.append(f'# Error: {err_msg}')
+    else:
+        parts.append('# Error: Code produced incorrect output.')
+
+    parts.append('')
+    parts.append('# Write the corrected version:')
+    return '\n'.join(parts)
+
+
+def self_repair_strategy(
+    model,
+    tokenizer,
+    prompt: str,
+    test_code: str,
+    max_retries: int = 3,
+    temperature: float = 0.7,
+) -> tuple[bool, float, int]:
+    """Run self-repair: generate, test, retry with error feedback.
+
+    Args:
+        model: HuggingFace model.
+        tokenizer: HuggingFace tokenizer.
+        prompt: The function signature/docstring.
+        test_code: Test code to execute.
+        max_retries: Max retry attempts after initial generation.
+        temperature: Sampling temperature for retries.
+
+    Returns:
+        (passed, reward, attempts) tuple.
+    """
+    current_prompt = prompt
+    best_reward = 0.0
+    best_passed = False
+
+    for attempt in range(1 + max_retries):
+        # First attempt: greedy. Retries: sample with temperature.
+        temp = 0.0 if attempt == 0 else temperature
+        completions = generate_completions(
+            model,
+            tokenizer,
+            current_prompt,
+            n_samples=1,
+            temperature=temp,
+        )
+        code = current_prompt + completions[0]
+
+        # For retries, the prompt includes error context, so
+        # we need to extract just the function for testing
+        if attempt > 0:
+            # The model might regenerate the full function
+            # Extract just the completion after the original prompt
+            code = prompt + completions[0]
+
+        result = run_humaneval_tests(code, test_code, timeout=5)
+
+        if result.all_passed:
+            return True, 1.0, attempt + 1
+
+        reward = result.reward
+        if reward > best_reward:
+            best_reward = reward
+
+        # Build error prompt for retry
+        current_prompt = _build_repair_prompt(
+            prompt,
+            code,
+            result.stderr,
+            result.timed_out,
+        )
+
+    return best_passed, best_reward, 1 + max_retries
+
+
 def main() -> None:
     """Run HumanEval inference-time scaling experiment."""
     parser = argparse.ArgumentParser(
@@ -361,13 +472,15 @@ def main() -> None:
         b = 'Y' if result.best_of_n_correct else 'N'
         c = 'Y' if result.consensus_correct else 'N'
         t = 'Y' if result.codet_correct else 'N'
+        r = 'Y' if result.repair_correct else 'N'
         nc = result.n_correct_samples
         ns = result.n_samples
+        ra = result.repair_attempts
         dt = result.generation_time
-        status = (
-            f'g={g} bon={b} con={c} codet={t} ({nc}/{ns} correct) [{dt:.1f}s]'
+        print(
+            f'g={g} bon={b} con={c} codet={t} '
+            f'repair={r}({ra}) ({nc}/{ns}) [{dt:.1f}s]'
         )
-        print(status)
 
     # Compute aggregate metrics
     n = len(results)
@@ -375,6 +488,8 @@ def main() -> None:
     bon_acc = sum(r.best_of_n_correct for r in results) / n
     consensus_acc = sum(r.consensus_correct for r in results) / n
     codet_acc = sum(r.codet_correct for r in results) / n
+    repair_acc = sum(r.repair_correct for r in results) / n
+    avg_attempts = sum(r.repair_attempts for r in results) / n
 
     # Compute pass@k for different k values
     pass_at_k_data = [(r.n_samples, r.n_correct_samples) for r in results]
@@ -386,13 +501,15 @@ def main() -> None:
     print(f'\nModel: {args.model}')
     print(f'Problems: {n}')
     print(f'Samples per problem: {args.n_samples}')
-    print(f'Total time: {total_time:.0f}s ({total_time / 60:.1f}min)')
+    print(f'Total time: {total_time:.0f}s')
     print(f'\n{"Strategy":<20} {"Accuracy":>10}')
     print('-' * 32)
     print(f'{"Greedy (pass@1)":<20} {greedy_acc:>10.1%}')
     print(f'{"Best-of-N":<20} {bon_acc:>10.1%}')
     print(f'{"Consensus":<20} {consensus_acc:>10.1%}')
     print(f'{"CodeT":<20} {codet_acc:>10.1%}')
+    print(f'{"Self-Repair":<20} {repair_acc:>10.1%}')
+    print(f'  (avg {avg_attempts:.1f} attempts)')
 
     if args.n_samples >= 5:
         print(f'\n{"Metric":<20} {"Value":>10}')
@@ -413,6 +530,8 @@ def main() -> None:
         'best_of_n_accuracy': bon_acc,
         'consensus_accuracy': consensus_acc,
         'codet_accuracy': codet_acc,
+        'repair_accuracy': repair_acc,
+        'repair_avg_attempts': avg_attempts,
         'total_time_seconds': total_time,
         'per_problem': [
             {
@@ -421,6 +540,8 @@ def main() -> None:
                 'best_of_n_correct': r.best_of_n_correct,
                 'consensus_correct': r.consensus_correct,
                 'codet_correct': r.codet_correct,
+                'repair_correct': r.repair_correct,
+                'repair_attempts': r.repair_attempts,
                 'n_correct_samples': r.n_correct_samples,
                 'generation_time': r.generation_time,
             }
