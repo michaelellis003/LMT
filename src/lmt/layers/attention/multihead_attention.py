@@ -76,6 +76,10 @@ class MultiHeadAttention(nn.Module):
         # Pre-compute scaling factor for efficiency
         self.scale = 1.0 / math.sqrt(self.head_dim)
 
+        # Attention weights stored for analysis (not saved in state_dict).
+        # Shape: [batch, num_heads, seq_len, seq_len] after forward.
+        self._attn_weights: torch.Tensor | None = None
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass of the Multi-Head Attention layer.
 
@@ -117,6 +121,7 @@ class MultiHeadAttention(nn.Module):
         attn_weights = torch.softmax(attn_scores.float(), dim=-1).to(
             queries.dtype
         )
+        self._attn_weights = attn_weights.detach()
 
         context_vec = (attn_weights @ values).transpose(1, 2)
         context_vec = context_vec.contiguous().view(

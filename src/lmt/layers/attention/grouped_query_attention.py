@@ -142,6 +142,10 @@ class GroupedQueryAttention(nn.Module):
         self._first_layer_v: Tensor | None = None
         self._value_residual_mix: float = 0.0
 
+        # Attention weights stored for analysis (not saved in state_dict).
+        # Shape: [batch, num_heads, seq_len, seq_len] after forward.
+        self._attn_weights: Tensor | None = None
+
     def forward(self, x: Tensor) -> Tensor:
         """Apply grouped query attention.
 
@@ -222,6 +226,7 @@ class GroupedQueryAttention(nn.Module):
 
         # Upcast to FP32 for softmax stability
         attn = torch.softmax(attn.float(), dim=-1).to(q.dtype)
+        self._attn_weights = attn.detach()
 
         out = attn @ v
         out = out.transpose(1, 2).contiguous()
