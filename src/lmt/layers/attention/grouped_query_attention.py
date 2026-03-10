@@ -35,25 +35,23 @@ from lmt.layers.attention.kv_cache import KVCache
 from lmt.models.config import ModelConfig
 
 if TYPE_CHECKING:
-    from lmt.layers.positional import RoPE
+    from lmt.layers.positional import ALiBi, RoPE
 
 
 class GroupedQueryAttention(nn.Module):
     r"""Grouped Query Attention.
 
-    Supports optional RoPE integration and sliding window masking,
-    making it composable enough to serve as the attention layer for
-    LLaMA (GQA + RoPE), Mixtral (GQA + RoPE + sliding window), and
-    standard GPT (no RoPE, no window).
+    Supports optional RoPE integration, ALiBi bias, and sliding window
+    masking, making it composable enough to serve as the attention
+    layer for LLaMA (GQA + RoPE), Mixtral (GQA + RoPE + sliding
+    window), and standard GPT (no RoPE, no window).
 
     Args:
         model_config: Model configuration with embed_dim, num_heads,
             num_kv_heads, context_length, and qkv_bias.
         rope: Optional RoPE instance for rotary positional encoding.
-            When provided, RoPE is applied to Q and K inside the
-            attention computation.
-        window_size: Optional sliding window size. When set, each
-            token only attends to the previous ``window_size`` tokens.
+        alibi: Optional ALiBi instance for linear bias encoding.
+        window_size: Optional sliding window size.
     """
 
     causal_mask: Tensor
@@ -62,6 +60,7 @@ class GroupedQueryAttention(nn.Module):
         self,
         model_config: ModelConfig,
         rope: RoPE | None = None,
+        alibi: ALiBi | None = None,
         window_size: int | None = None,
     ) -> None:
         """Initialize Grouped Query Attention.
@@ -70,8 +69,14 @@ class GroupedQueryAttention(nn.Module):
             model_config: Model configuration. If num_kv_heads is
                 None, defaults to num_heads (standard MHA).
             rope: Optional RoPE instance for Q/K rotation.
+            alibi: Optional ALiBi instance for attention bias.
             window_size: Optional sliding window size.
+
+        Raises:
+            ValueError: If both rope and alibi are provided.
         """
+        if rope is not None and alibi is not None:
+            raise ValueError('Cannot use both rope and alibi simultaneously')
         super().__init__()
         embed_dim = model_config.embed_dim
         num_heads = model_config.num_heads
@@ -94,6 +99,7 @@ class GroupedQueryAttention(nn.Module):
         self.head_dim = head_dim
         self.num_groups = num_heads // num_kv_heads
         self.rope = rope
+        self.alibi = alibi
 
         bias = model_config.qkv_bias
 
@@ -223,6 +229,15 @@ class GroupedQueryAttention(nn.Module):
         q_start = kv_len - seq_len
         mask = self.causal_mask[q_start:kv_len, :kv_len]
         attn = attn + mask
+
+        # ALiBi: add distance-based bias to attention scores
+        if self.alibi is not None:
+            attn = (
+                attn
+                + self.alibi.get_bias(kv_len).to(attn.device)[
+                    :, q_start:kv_len, :kv_len
+                ]
+            )
 
         # Upcast to FP32 for softmax stability
         attn = torch.softmax(attn.float(), dim=-1).to(q.dtype)
